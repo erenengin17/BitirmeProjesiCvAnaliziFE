@@ -6,7 +6,7 @@ import {
   UserAddOutlined,
 } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
-import AtlasCvLogo from "../assets/images/atlascv_logo_v2.png";
+import AtlasCvLogo from "../assets/images/atlascv_logo_v2Navbar.png";
 
 
 const { Text } = Typography;
