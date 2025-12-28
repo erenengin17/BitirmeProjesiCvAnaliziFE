@@ -71,7 +71,6 @@ export default function Signup() {
                 />
 
                 <Space direction="vertical" size={6} style={{ position: "relative" }}>
-                  <Text style={{ color: "rgba(255,255,255,0.9)" }}>AtlasCv</Text>
                   <Title level={2} style={{ color: "white", margin: 0 }}>
                     Kayıt Ol
                   </Title>
