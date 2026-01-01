@@ -1,8 +1,10 @@
 import React, { useMemo } from "react";
-import { Row, Col, Card, Typography, Form, Input, Button, Divider, Space } from "antd";
+import { Row, Col, Card, Typography, Form, Input, Button, Divider, Space, message } from "antd";
 import { MailOutlined, LockOutlined, LoginOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
+
+import { useLogin } from "../requests/UserQueries";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -11,6 +13,7 @@ const ACCENT = "#FF6B6B";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { mutateAsync: loginMutate, isPending } = useLogin();
 
   const cardStyle = useMemo(
     () => ({
@@ -22,10 +25,19 @@ export default function Login() {
     []
   );
 
-  const onFinish = (values) => {
-    console.log("LOGIN:", values);
-    // TODO: backend'e login isteği at -> token al -> localStorage -> yönlendir
-    navigate("/"); // şimdilik anasayfaya dön
+  const onFinish = async (values) => {
+    try {
+      await loginMutate({
+        email: values.email,
+        password: values.password,
+      });
+
+      message.success("Giriş başarılı ✅");
+      navigate("/"); // istersen /dashboard yap
+    } catch (err) {
+      const apiMsg = err?.response?.data?.error;
+      message.error(apiMsg || "Giriş sırasında hata oluştu.");
+    }
   };
 
   return (
@@ -114,7 +126,10 @@ export default function Login() {
 
                   <Row justify="space-between" align="middle" style={{ marginBottom: 10 }}>
                     <Text style={{ color: "#6b7280" }}>
-                      Hesabın yok mu? <Link to="/signup" style={{ color: PRIMARY, fontWeight: 600 }}>Kayıt Ol</Link>
+                      Hesabın yok mu?{" "}
+                      <Link to="/signup" style={{ color: PRIMARY, fontWeight: 600 }}>
+                        Kayıt Ol
+                      </Link>
                     </Text>
                   </Row>
 
@@ -123,6 +138,8 @@ export default function Login() {
                     htmlType="submit"
                     size="large"
                     icon={<LoginOutlined />}
+                    loading={isPending}
+                    disabled={isPending}
                     style={{
                       width: "100%",
                       borderRadius: 999,
@@ -136,9 +153,8 @@ export default function Login() {
                     Giriş Yap
                   </Button>
 
-                  <Divider style={{ margin: "18px 0" }}>
-                  </Divider>
-                  
+                  <Divider style={{ margin: "18px 0" }} />
+
                   <div style={{ marginTop: 16, textAlign: "center" }}>
                     <Text style={{ color: "#9ca3af", fontSize: 12 }}>
                       Devam ederek Kullanım Koşulları’nı kabul etmiş olursunuz.

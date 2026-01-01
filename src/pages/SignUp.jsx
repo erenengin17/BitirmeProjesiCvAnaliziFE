@@ -1,8 +1,10 @@
 import React, { useMemo } from "react";
-import { Row, Col, Card, Typography, Form, Input, Button, Divider, Space } from "antd";
+import { Row, Col, Card, Typography, Form, Input, Button, Divider, Space, message } from "antd";
 import { UserOutlined, MailOutlined, LockOutlined, UserAddOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import { useSignup } from "../requests/UserQueries";
+
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -11,6 +13,7 @@ const ACCENT = "#FF6B6B";
 
 export default function Signup() {
   const navigate = useNavigate();
+  const { mutateAsync: signupMutate, isPending } = useSignup();
 
   const cardStyle = useMemo(
     () => ({
@@ -22,10 +25,23 @@ export default function Signup() {
     []
   );
 
-  const onFinish = (values) => {
-    console.log("SIGNUP:", values);
-    // TODO: backend'e signup isteği at -> token al -> localStorage -> yönlendir
-    navigate("/login");
+  const onFinish = async (values) => {
+    try {
+      // password2 backend’e gitmesin
+      const payload = {
+        fullName: values.fullName,
+        email: values.email,
+        password: values.password,
+      };
+
+      await signupMutate(payload);
+
+      message.success("Kayıt başarılı! Giriş sayfasına yönlendiriliyorsun.");
+      navigate("/login");
+    } catch (err) {
+      const apiMsg = err?.response?.data?.error;
+      message.error(apiMsg || "Kayıt sırasında hata oluştu.");
+    }
   };
 
   return (
@@ -155,6 +171,8 @@ export default function Signup() {
                     htmlType="submit"
                     size="large"
                     icon={<UserAddOutlined />}
+                    loading={isPending}
+                    disabled={isPending}
                     style={{
                       width: "100%",
                       borderRadius: 999,
@@ -177,8 +195,7 @@ export default function Signup() {
                     </Text>
                   </Row>
 
-                  <Divider style={{ margin: "18px 0" }}>
-                  </Divider>
+                  <Divider style={{ margin: "18px 0" }} />
 
                   <div style={{ marginTop: 16, textAlign: "center" }}>
                     <Text style={{ color: "#9ca3af", fontSize: 12 }}>
