@@ -33,7 +33,7 @@ export default function Login() {
       });
 
       message.success("Giriş başarılı ✅");
-      navigate("/"); // istersen /dashboard yap
+      navigate("/dashboard"); 
     } catch (err) {
       const apiMsg = err?.response?.data?.error;
       message.error(apiMsg || "Giriş sırasında hata oluştu.");
@@ -48,7 +48,6 @@ export default function Login() {
         <Row justify="center" style={{ padding: "0 16px" }}>
           <Col xs={24} sm={22} md={16} lg={12} xl={10}>
             <Card style={cardStyle} styles={{ body: { padding: 0 } }}>
-              {/* ÜST BANNER */}
               <div
                 style={{
                   position: "relative",
@@ -92,7 +91,6 @@ export default function Login() {
                 </Space>
               </div>
 
-              {/* FORM */}
               <div style={{ padding: 26 }}>
                 <Form layout="vertical" onFinish={onFinish} autoComplete="off">
                   <Form.Item
