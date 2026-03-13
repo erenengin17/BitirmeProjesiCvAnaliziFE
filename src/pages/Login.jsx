@@ -1,9 +1,8 @@
 import React, { useMemo } from "react";
-import { Row, Col, Card, Typography, Form, Input, Button, Divider, Space, message } from "antd";
+import { Row, Col, Card, Typography, Form, Input, Button, Divider, Space, notification } from "antd";
 import { MailOutlined, LockOutlined, LoginOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
-
 import { useLogin } from "../requests/UserQueries";
 
 const { Title, Text, Paragraph } = Typography;
@@ -14,6 +13,16 @@ const ACCENT = "#FF6B6B";
 export default function Login() {
   const navigate = useNavigate();
   const { mutateAsync: loginMutate, isPending } = useLogin();
+  const [api, contextHolder] = notification.useNotification();
+
+  const showNotification = (type, message, description) => {
+    api[type]({
+      message,
+      description,
+      placement: "topRight",
+      duration: 3,
+    });
+  };
 
   const cardStyle = useMemo(
     () => ({
@@ -32,16 +41,32 @@ export default function Login() {
         password: values.password,
       });
 
-      message.success("Giriş başarılı ✅");
-      navigate("/dashboard"); 
+      showNotification("success", "Giriş Başarılı", "Başarıyla giriş yaptın.");
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 700);
     } catch (err) {
-      const apiMsg = err?.response?.data?.error;
-      message.error(apiMsg || "Giriş sırasında hata oluştu.");
+      const apiMsg = err?.response?.data?.error || err?.response?.data?.message;
+
+      if (apiMsg?.toLowerCase().includes("doğrula")) {
+        showNotification("warning", "Email Doğrulama Gerekli", apiMsg);
+        setTimeout(() => {
+          navigate("/signup", { state: { email: values.email, step: "verify" } });
+        }, 700);
+        return;
+      }
+
+      showNotification(
+        "error",
+        "Giriş Hatası",
+        apiMsg || "Giriş sırasında hata oluştu."
+      );
     }
   };
 
   return (
     <div style={{ minHeight: "100vh", background: "#fafafa" }}>
+      {contextHolder}
       <Navbar />
 
       <div style={{ paddingTop: 110, paddingBottom: 48 }}>

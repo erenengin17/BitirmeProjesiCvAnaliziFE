@@ -12,7 +12,7 @@ import {
   Divider,
   Spin,
   Empty,
-  message,
+  notification,
 } from "antd";
 import {
   InboxOutlined,
@@ -41,6 +41,17 @@ export default function MainPage() {
   const [positionName, setPositionName] = useState("");
   const [description, setDescription] = useState("");
   const [fileList, setFileList] = useState([]);
+
+  const [api, contextHolder] = notification.useNotification();
+
+  const showNotification = (type, message, description) => {
+    api[type]({
+      message,
+      description,
+      placement: "topRight",
+      duration: 3,
+    });
+  };
 
   const {
     mutateAsync: createAnalysisMutate,
@@ -77,7 +88,7 @@ export default function MainPage() {
         file.name.toLowerCase().endsWith(".pdf");
 
       if (!isPdf) {
-        message.error(`${file.name} PDF değil.`);
+        showNotification("error", "Geçersiz Dosya", `${file.name} PDF değil.`);
         return Upload.LIST_IGNORE;
       }
 
@@ -87,7 +98,7 @@ export default function MainPage() {
       );
 
       if (alreadyExists) {
-        message.warning(`${file.name} zaten eklendi.`);
+        showNotification("warning", "Dosya Zaten Eklendi", `${file.name} zaten eklendi.`);
         return Upload.LIST_IGNORE;
       }
 
@@ -99,22 +110,22 @@ export default function MainPage() {
   const handleCreateAnalysis = async () => {
     try {
       if (!analysisName.trim()) {
-        message.error("Analiz adı zorunlu.");
+        showNotification("error", "Eksik Bilgi", "Analiz adı zorunlu.");
         return;
       }
 
       if (!positionName.trim()) {
-        message.error("Pozisyon adı zorunlu.");
+        showNotification("error", "Eksik Bilgi", "Pozisyon adı zorunlu.");
         return;
       }
 
       if (fileList.length === 0) {
-        message.error("En az bir PDF CV yüklemelisin.");
+        showNotification("error", "Eksik Dosya", "En az bir PDF CV yüklemelisin.");
         return;
       }
 
       if (!user?.id) {
-        message.error("Kullanıcı bilgisi bulunamadı.");
+        showNotification("error", "Kullanıcı Hatası", "Kullanıcı bilgisi bulunamadı.");
         return;
       }
 
@@ -128,7 +139,7 @@ export default function MainPage() {
 
       await createAnalysisMutate(payload);
 
-      message.success("Analiz başarıyla oluşturuldu ✅");
+      showNotification("success", "Analiz Oluşturuldu", "Analiz başarıyla oluşturuldu.");
 
       setAnalysisName("");
       setPositionName("");
@@ -138,7 +149,7 @@ export default function MainPage() {
       refetch();
     } catch (error) {
       console.error(error);
-      message.error("Analiz oluşturulurken hata oluştu.");
+      showNotification("error", "Analiz Hatası", "Analiz oluşturulurken hata oluştu.");
     }
   };
 
@@ -162,6 +173,7 @@ export default function MainPage() {
 
   return (
     <div className="min-h-screen bg-[#f7f8fc]">
+      {contextHolder}
       <LoginNavbar />
 
       <Row justify="center" className="w-full">
@@ -410,7 +422,7 @@ export default function MainPage() {
                         </Dragger>
                       </Col>
 
-                      <Col span={24} style={{ marginTop: 12 }} >
+                      <Col span={24} style={{ marginTop: 12 }}>
                         <Card
                           style={{
                             borderRadius: 20,

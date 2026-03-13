@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import UserManager from "../requests/UserManager";
 
 export const useSignup = () => {
@@ -15,5 +15,17 @@ export const useLogin = () => {
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify({ id, fullName, email }));
     },
+  });
+};
+
+export const useVerifyEmail = () => {
+  return useMutation({
+    mutationFn: (payload) => UserManager.verifyEmail(payload),
+  });
+};
+
+export const useResendCode = () => {
+  return useMutation({
+    mutationFn: (payload) => UserManager.resendCode(payload),
   });
 };
