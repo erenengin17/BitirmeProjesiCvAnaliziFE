@@ -30,3 +30,26 @@ export const useAnalysisById = (analysisId) => {
     enabled: !!analysisId,
   });
 };
+
+export const useAnalysisFiles = (analysisId) => {
+  return useQuery({
+    queryKey: ["analysisFiles", analysisId],
+    queryFn: () => AnalysisManager.getAnalysisFiles(analysisId),
+    enabled: !!analysisId,
+  });
+};
+
+export const useRunAnalysis = () => {
+  return useMutation({
+    mutationFn: ({ analysisId, payload }) =>
+      AnalysisManager.runAnalysis(analysisId, payload),
+  });
+};
+
+export const useRunResults = (runId) => {
+  return useQuery({
+    queryKey: ["analysisResults", runId],
+    queryFn: () => AnalysisManager.getRunResults(runId),
+    enabled: !!runId,
+  });
+};

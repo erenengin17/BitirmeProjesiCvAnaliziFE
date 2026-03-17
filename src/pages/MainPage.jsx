@@ -24,6 +24,7 @@ import {
   FileSearchOutlined,
   DeleteOutlined,
 } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
 import LoginNavbar from "../components/LoginNavbar";
 import {
   useCreateAnalysis,
@@ -36,6 +37,7 @@ const { TextArea } = Input;
 
 export default function MainPage() {
   const user = JSON.parse(localStorage.getItem("user"));
+  const navigate = useNavigate();
 
   const [analysisName, setAnalysisName] = useState("");
   const [positionName, setPositionName] = useState("");
@@ -98,7 +100,11 @@ export default function MainPage() {
       );
 
       if (alreadyExists) {
-        showNotification("warning", "Dosya Zaten Eklendi", `${file.name} zaten eklendi.`);
+        showNotification(
+          "warning",
+          "Dosya Zaten Eklendi",
+          `${file.name} zaten eklendi.`
+        );
         return Upload.LIST_IGNORE;
       }
 
@@ -107,51 +113,61 @@ export default function MainPage() {
     },
   };
 
-  const handleCreateAnalysis = async () => {
-    try {
-      if (!analysisName.trim()) {
-        showNotification("error", "Eksik Bilgi", "Analiz adı zorunlu.");
-        return;
-      }
-
-      if (!positionName.trim()) {
-        showNotification("error", "Eksik Bilgi", "Pozisyon adı zorunlu.");
-        return;
-      }
-
-      if (fileList.length === 0) {
-        showNotification("error", "Eksik Dosya", "En az bir PDF CV yüklemelisin.");
-        return;
-      }
-
-      if (!user?.id) {
-        showNotification("error", "Kullanıcı Hatası", "Kullanıcı bilgisi bulunamadı.");
-        return;
-      }
-
-      const payload = {
-        analysisName,
-        positionName,
-        description,
-        cvCount: fileList.length,
-        userId: user.id,
-      };
-
-      await createAnalysisMutate(payload);
-
-      showNotification("success", "Analiz Oluşturuldu", "Analiz başarıyla oluşturuldu.");
-
-      setAnalysisName("");
-      setPositionName("");
-      setDescription("");
-      setFileList([]);
-
-      refetch();
-    } catch (error) {
-      console.error(error);
-      showNotification("error", "Analiz Hatası", "Analiz oluşturulurken hata oluştu.");
+const handleCreateAnalysis = async () => {
+  try {
+    if (!analysisName.trim()) {
+      showNotification("error", "Eksik Bilgi", "Analiz adı zorunlu.");
+      return;
     }
-  };
+
+    if (!positionName.trim()) {
+      showNotification("error", "Eksik Bilgi", "Pozisyon adı zorunlu.");
+      return;
+    }
+
+    if (fileList.length === 0) {
+      showNotification("error", "Eksik Dosya", "En az bir PDF CV yüklemelisin.");
+      return;
+    }
+
+    if (!user?.id) {
+      showNotification("error", "Kullanıcı Hatası", "Kullanıcı bilgisi bulunamadı.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("analysisName", analysisName.trim());
+    formData.append("positionName", positionName.trim());
+    formData.append("description", description?.trim() || "");
+    formData.append("userId", String(user.id));
+
+    fileList.forEach((file) => {
+      formData.append("files", file.originFileObj || file);
+    });
+
+    await createAnalysisMutate(formData);
+
+    showNotification(
+      "success",
+      "Analiz Oluşturuldu",
+      "Analizinize devam etmek için Analizler sayfasına gidin."
+    );
+
+    setAnalysisName("");
+    setPositionName("");
+    setDescription("");
+    setFileList([]);
+
+    refetch();
+  } catch (error) {
+    console.error(error);
+    showNotification(
+      "error",
+      "Analiz Hatası",
+      error?.response?.data?.message || "Analiz oluşturulurken hata oluştu."
+    );
+  }
+};
 
   const infoCards = [
     {
@@ -566,7 +582,6 @@ export default function MainPage() {
                         <Tag color="purple">İsimlendirilmiş Analiz</Tag>
                         <Tag color="cyan">Toplu Yükleme</Tag>
                       </Space>
-
                       <Button
                         type="primary"
                         size="large"
@@ -582,7 +597,7 @@ export default function MainPage() {
                           boxShadow: "0 10px 24px rgba(255,107,107,0.25)",
                         }}
                       >
-                        Analizi Başlat
+                        Analizi Oluştur
                       </Button>
                     </div>
                   </Card>
@@ -687,7 +702,9 @@ export default function MainPage() {
                                 borderRadius: 16,
                                 background: "#f8faff",
                                 border: "1px solid #e8edff",
+                                cursor: "pointer",
                               }}
+                              onClick={() => navigate(`/analizler/${item.id}`)}
                             >
                               <Text
                                 style={{
