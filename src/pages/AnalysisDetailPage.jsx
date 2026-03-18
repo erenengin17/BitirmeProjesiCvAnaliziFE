@@ -29,6 +29,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import LoginNavbar from "../components/LoginNavbar";
 import SelectableTagGroup from "../components/SelectableTagGroup";
 import {
+  useLastRun,
   useAnalysisById,
   useAnalysisFiles,
   useRunAnalysis,
@@ -44,6 +45,12 @@ export default function AnalysisDetailPage() {
   const { data, isLoading, refetch } = useAnalysisById(id);
   const { data: filesData, isLoading: isFilesLoading } = useAnalysisFiles(id);
   const { mutateAsync: runAnalysisMutate, isPending: isRunning } = useRunAnalysis();
+
+  const {
+    data: lastRun,
+    isLoading: isLastRunLoading,
+    refetch: refetchLastRun,
+  } = useLastRun(id);
 
   const analysis = data?.data;
   const analysisFiles = filesData?.data || [];
@@ -109,7 +116,11 @@ export default function AnalysisDetailPage() {
         description: "Geniş teknik altyapıya sahip, çok yönlü adayları değerlendirmek için.",
         hardSkills: ["Web Geliştirme", "Backend Geliştirme", "Veritabanı"],
         softSkills: ["Takım Çalışması", "İletişim"],
-        education: ["Bilgisayar Mühendisliği", "Yazılım Mühendisliği", "Yönetim Bilişim Sistemleri"],
+        education: [
+          "Bilgisayar Mühendisliği",
+          "Yazılım Mühendisliği",
+          "Yönetim Bilişim Sistemleri",
+        ],
       },
     ],
     []
@@ -172,6 +183,9 @@ export default function AnalysisDetailPage() {
   const isAnalysisCompleted =
     analysis?.status === "Tamamlandi" || analysis?.status === "Tamamlandı";
 
+  const resolvedLastRunId =
+    latestRunId || lastRun?.data?.id || lastRun?.id || null;
+
   const handleSelectProfile = (profile) => {
     setSelectedProfile(profile.key);
     setSelectedHardSkills(profile.hardSkills || []);
@@ -200,10 +214,10 @@ export default function AnalysisDetailPage() {
         payload,
       });
 
-      const runId = response?.data?.runId;
-      setLatestRunId(runId || null);
+      const runId = response?.data?.runId || response?.data?.id || null;
+      setLatestRunId(runId);
 
-      await refetch();
+      await Promise.all([refetch(), refetchLastRun()]);
 
       api.success({
         message: "Analiz Başlatıldı",
@@ -216,6 +230,33 @@ export default function AnalysisDetailPage() {
         message: "Analiz Başlatılamadı",
         description:
           error?.response?.data?.message || "Analiz çalıştırılırken bir hata oluştu.",
+        placement: "topRight",
+      });
+    }
+  };
+
+  const handleShowResults = async () => {
+    try {
+      let runId = resolvedLastRunId;
+
+      if (!runId) {
+        const refreshed = await refetchLastRun();
+        runId = refreshed?.data?.data?.id || refreshed?.data?.id || null;
+      }
+
+      if (runId) {
+        navigate(`/analysis-runs/${runId}/results`);
+        return;
+      }
+
+      api.info({
+        message: "Henüz analiz çalıştırılmamış",
+      });
+    } catch (error) {
+      console.error(error);
+      api.error({
+        message: "Sonuçlar açılamadı",
+        description: "Son çalıştırma bilgisi alınırken bir hata oluştu.",
         placement: "topRight",
       });
     }
@@ -424,7 +465,17 @@ export default function AnalysisDetailPage() {
                               Hızlı başlamak için aşağıdan bir analiz profili seçebilir, ardından detayları istersen özelleştirebilirsin.
                             </Paragraph>
                           </div>
-
+                              <div>
+                                <Text strong style={{ display: "block", marginBottom: 8 }}>
+                                  Çalıştırma Adı
+                                </Text>
+                                <Input
+                                  value={runName}
+                                  onChange={(e) => setRunName(e.target.value)}
+                                  placeholder="Örn: Frontend Aday Analizi - Mart"
+                                  style={{ borderRadius: 12, height: 44 }}
+                                />
+                              </div>
                           <Row gutter={[16, 16]}>
                             {profileTemplates.map((profile) => {
                               const active = selectedProfile === profile.key;
@@ -554,14 +605,16 @@ export default function AnalysisDetailPage() {
                               min={0}
                               max={30}
                               value={minExperienceYears}
-                              onChange={setMinExperienceYears}
+                              onChange={(value) => setMinExperienceYears(value || 0)}
                               style={{ width: 220 }}
                             />
                           </div>
 
                           <div style={{ display: "grid", gap: 12 }}>
                             <Card
-                              onClick={() => setRequireProjectOrCertificate(!requireProjectOrCertificate)}
+                              onClick={() =>
+                                setRequireProjectOrCertificate(!requireProjectOrCertificate)
+                              }
                               style={{
                                 borderRadius: 16,
                                 cursor: "pointer",
@@ -576,7 +629,9 @@ export default function AnalysisDetailPage() {
                               styles={{ body: { padding: 16 } }}
                             >
                               <Space direction="vertical" size={4}>
-                                <Text strong>Projeler ve sertifikalar değerlendirmede etkili olsun</Text>
+                                <Text strong>
+                                  Projeler ve sertifikalar değerlendirmede etkili olsun
+                                </Text>
                                 <Text style={{ color: "#6b7280" }}>
                                   Adayın yaptığı projeler veya aldığı sertifikalar puanlamaya dahil edilsin.
                                 </Text>
@@ -606,7 +661,6 @@ export default function AnalysisDetailPage() {
                               </Space>
                             </Card>
                           </div>
-
                           <div>
                             <Text strong style={{ display: "block", marginBottom: 8 }}>
                               Ek Öncelikli Kelimeler
@@ -668,18 +722,8 @@ export default function AnalysisDetailPage() {
 
                           <Button
                             type="primary"
-                            onClick={() => {
-                              if (latestRunId) {
-                                navigate(`/analysis-runs/${latestRunId}/results`);
-                              } else {
-                                api.info({
-                                  message: "Run bilgisi bulunamadı",
-                                  description:
-                                    "Sayfa yenilendiyse son run bilgisi tutulmamış olabilir. Sonuçları görmek için son run kaydı backend’den ayrıca çekilebilir.",
-                                  placement: "topRight",
-                                });
-                              }
-                            }}
+                            loading={isLastRunLoading}
+                            onClick={handleShowResults}
                             style={{
                               borderRadius: 999,
                               height: 46,
@@ -764,89 +808,87 @@ export default function AnalysisDetailPage() {
                       )}
                     </Card>
 
-                    <Card
-                      style={{
-                        borderRadius: 24,
-                        border: "1px solid #e9edf5",
-                        boxShadow: "0 18px 40px rgba(0,0,0,0.06)",
-                      }}
-                      styles={{ body: { padding: 24 } }}
-                    >
-                      <Title level={4} style={{ marginTop: 0, marginBottom: 12 }}>
-                        Seçili Kriter Özeti
-                      </Title>
+                        {!isAnalysisCompleted && (
+                          <Card
+                            style={{
+                              borderRadius: 24,
+                              border: "1px solid #e9edf5",
+                              boxShadow: "0 18px 40px rgba(0,0,0,0.06)",
+                            }}
+                            styles={{ body: { padding: 24 } }}
+                          >
+                            <Title level={4} style={{ marginTop: 0, marginBottom: 12 }}>
+                              Seçili Kriter Özeti
+                            </Title>
 
-                      <div style={{ display: "grid", gap: 12 }}>
-                        <div>
-                          <Text strong style={{ display: "block" }}>
-                            Hazır Profil
-                          </Text>
-                          <Text style={{ color: "#6b7280" }}>
-                            {profileTemplates.find((x) => x.key === selectedProfile)?.title || "Seçilmedi"}
-                          </Text>
-                        </div>
+                            <div style={{ display: "grid", gap: 12 }}>
+                              <div>
+                                <Text strong style={{ display: "block" }}>
+                                  Hazır Profil
+                                </Text>
+                                <Text style={{ color: "#6b7280" }}>
+                                  {profileTemplates.find((x) => x.key === selectedProfile)?.title || "Seçilmedi"}
+                                </Text>
+                              </div>
 
-                        <div>
-                          <Text strong style={{ display: "block" }}>
-                            Teknik Alanlar
-                          </Text>
-                          <Text style={{ color: "#6b7280" }}>
-                            {selectedHardSkills.length > 0
-                              ? selectedHardSkills.join(", ")
-                              : "Seçilmedi"}
-                          </Text>
-                        </div>
+                              <div>
+                                <Text strong style={{ display: "block" }}>
+                                  Teknik Alanlar
+                                </Text>
+                                <Text style={{ color: "#6b7280" }}>
+                                  {selectedHardSkills.length > 0
+                                    ? selectedHardSkills.join(", ")
+                                    : "Seçilmedi"}
+                                </Text>
+                              </div>
 
-                        <div>
-                          <Text strong style={{ display: "block" }}>
-                            Kişisel Yetkinlikler
-                          </Text>
-                          <Text style={{ color: "#6b7280" }}>
-                            {selectedSoftSkills.length > 0
-                              ? selectedSoftSkills.join(", ")
-                              : "Seçilmedi"}
-                          </Text>
-                        </div>
+                              <div>
+                                <Text strong style={{ display: "block" }}>
+                                  Kişisel Yetkinlikler
+                                </Text>
+                                <Text style={{ color: "#6b7280" }}>
+                                  {selectedSoftSkills.length > 0
+                                    ? selectedSoftSkills.join(", ")
+                                    : "Seçilmedi"}
+                                </Text>
+                              </div>
 
-                        <div>
-                          <Text strong style={{ display: "block" }}>
-                            Eğitim Alanları
-                          </Text>
-                          <Text style={{ color: "#6b7280" }}>
-                            {selectedEducation.length > 0
-                              ? selectedEducation.join(", ")
-                              : "Seçilmedi"}
-                          </Text>
-                        </div>
+                              <div>
+                                <Text strong style={{ display: "block" }}>
+                                  Eğitim Alanları
+                                </Text>
+                                <Text style={{ color: "#6b7280" }}>
+                                  {selectedEducation.length > 0
+                                    ? selectedEducation.join(", ")
+                                    : "Seçilmedi"}
+                                </Text>
+                              </div>
 
-                        <div>
-                          <Text strong style={{ display: "block" }}>
-                            Minimum Deneyim
-                          </Text>
-                          <Text style={{ color: "#6b7280" }}>
-                            {minExperienceYears} yıl
-                          </Text>
-                        </div>
+                              <div>
+                                <Text strong style={{ display: "block" }}>
+                                  Minimum Deneyim
+                                </Text>
+                                <Text style={{ color: "#6b7280" }}>
+                                  {minExperienceYears} yıl
+                                </Text>
+                              </div>
 
-                        <div>
-                          <Text strong style={{ display: "block" }}>
-                            Ek Ölçütler
-                          </Text>
-                          <Text style={{ color: "#6b7280" }}>
-                            {[
-                              requireProjectOrCertificate
-                                ? "Proje/Sertifika dahil"
-                                : null,
-                              useSemanticSimilarity
-                                ? "Açıklama uyumu aktif"
-                                : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" • ") || "Varsayılan"}
-                          </Text>
-                        </div>
-                      </div>
-                    </Card>
+                              <div>
+                                <Text strong style={{ display: "block" }}>
+                                  Ek Ölçütler
+                                </Text>
+                                <Text style={{ color: "#6b7280" }}>
+                                  {[
+                                    requireProjectOrCertificate ? "Proje/Sertifika dahil" : null,
+                                    useSemanticSimilarity ? "Açıklama uyumu aktif" : null,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" • ") || "Varsayılan"}
+                                </Text>
+                              </div>
+                            </div>
+                          </Card>
+                        )}
                   </div>
                 </Col>
               </Row>

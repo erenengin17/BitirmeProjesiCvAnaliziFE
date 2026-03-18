@@ -53,3 +53,14 @@ export const useRunResults = (runId) => {
     enabled: !!runId,
   });
 };
+
+export const useLastRun = (analysisId) => {
+  return useQuery({
+    queryKey: ["lastRun", analysisId],
+    queryFn: async () => {
+      const res = await AnalysisManager.getLastRun(analysisId);
+      return res.data;
+    },
+    enabled: !!analysisId,
+  });
+};

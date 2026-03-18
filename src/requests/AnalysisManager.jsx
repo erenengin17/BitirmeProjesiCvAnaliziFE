@@ -32,6 +32,10 @@ class AnalysisManager {
   getRunResults(runId) {
     return axiosInstance.get(`/api/analyses/runs/${runId}/results`);
   }
+  
+  getLastRun(analysisId) {
+  return axiosInstance.get(`/api/analyses/${analysisId}/last-run`);
+}
 }
 
 export default new AnalysisManager();
