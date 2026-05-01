@@ -1,42 +1,130 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  Row,
-  Col,
-  Typography,
-  Card,
-  Space,
-  Tag,
-  Spin,
-  Empty,
-  Divider,
-  Button,
-  Input,
-  InputNumber,
-  notification,
+  Row, Col, Typography, Card, Space, Tag, Spin, Empty,
+  Divider, Button, Input, InputNumber, Switch, Badge,
+  notification, Progress,
 } from "antd";
 import {
-  CalendarOutlined,
-  FolderOpenOutlined,
-  UserOutlined,
-  ArrowLeftOutlined,
-  BarChartOutlined,
-  FilePdfOutlined,
-  CheckCircleOutlined,
-  RocketOutlined,
-  AppstoreOutlined,
+  CalendarOutlined, FolderOpenOutlined, UserOutlined,
+  ArrowLeftOutlined, FilePdfOutlined,
+  CheckCircleOutlined, RocketOutlined, PlusOutlined,
+  SearchOutlined, CloseOutlined, AppstoreOutlined,
+  CodeOutlined, DatabaseOutlined, MobileOutlined,
+  ExperimentOutlined, DeploymentUnitOutlined, SafetyOutlined,
+  TeamOutlined, BookOutlined, SettingOutlined,
+  HistoryOutlined, BarChartOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
-import LoginNavbar from "../components/LoginNavbar";
 import SelectableTagGroup from "../components/SelectableTagGroup";
+import LoginNavbar from "../components/LoginNavbar";
 import {
-  useLastRun,
-  useAnalysisById,
-  useAnalysisFiles,
-  useRunAnalysis,
+  useLastRun, useAnalysisById, useAnalysisFiles, useRunAnalysis, useAnalysisRuns,
 } from "../requests/AnalysisQueries";
 
 const { Title, Text, Paragraph } = Typography;
-const { TextArea } = Input;
+
+// ── Sabit veriler ─────────────────────────────────────────────────────────────
+
+const CATEGORY_LIST = [
+  { key: "frontend",  label: "Frontend",  color: "#4F46E5", icon: <CodeOutlined /> },
+  { key: "backend",   label: "Backend",   color: "#0F766E", icon: <DatabaseOutlined /> },
+  { key: "mobile",    label: "Mobile",    color: "#EA580C", icon: <MobileOutlined /> },
+  { key: "data-ai",   label: "Data / AI", color: "#7C3AED", icon: <ExperimentOutlined /> },
+  { key: "devops",    label: "DevOps",    color: "#2563EB", icon: <DeploymentUnitOutlined /> },
+  { key: "security",  label: "Security",  color: "#DC2626", icon: <SafetyOutlined /> },
+];
+ 
+const TECHNOLOGY_MAP = {
+  frontend: [
+    "JavaScript","TypeScript","React","Next.js","Vue.js","Nuxt.js","Angular",
+    "HTML","CSS","Sass","Tailwind CSS","Bootstrap","Ant Design","Material UI",
+    "Redux","Zustand","React Query","Webpack","Vite","jQuery",
+  ],
+  backend: [
+    "Java","Spring Boot","Kotlin","C#",".NET","ASP.NET Core",
+    "Node.js","Express.js","NestJS","Python","Django","FastAPI",
+    "PHP","Laravel","Go","Gin","Ruby","Ruby on Rails",
+    "Rust","Scala","C","C++","Elixir","Haskell",
+    "REST API","GraphQL","Microservices","gRPC","Socket.IO",
+    "MySQL","PostgreSQL","MongoDB","Redis","SQLite","Cassandra","Elasticsearch",
+    "Hibernate","SQLAlchemy","Prisma","JWT","OAuth",
+  ],
+  mobile: [
+    "Java","Kotlin","Swift","Objective-C","Dart","Flutter","React Native",
+    "Android","iOS","Firebase","Jetpack Compose","SwiftUI","UIKit",
+    "MVVM","Room","Retrofit","Xamarin",
+  ],
+  "data-ai": [
+    "Python","R","MATLAB","Julia","Scala",
+    "Pandas","NumPy","Scikit-learn","TensorFlow","PyTorch","Keras",
+    "OpenCV","NLP","Machine Learning","Deep Learning","LLM","RAG","LangChain",
+    "Matplotlib","Seaborn","Jupyter","Hugging Face","Spark","Hadoop",
+    "Power BI","Tableau","SQL","dbt","Airflow","MLflow","ONNX",
+  ],
+  devops: [
+    "Docker","Kubernetes","Linux","Bash","Shell","PowerShell",
+    "AWS","Azure","GCP","Terraform","Ansible","Puppet","Chef",
+    "Jenkins","GitHub Actions","GitLab CI","CircleCI","CI/CD",
+    "Nginx","Apache","Helm","ArgoCD","Prometheus","Grafana","Vault","Pulumi",
+  ],
+  security: [
+    "Python","Bash","C","C++",
+    "Cyber Security","Network Security","OWASP","Penetration Testing",
+    "Burp Suite","Wireshark","Kali Linux","Nmap","Metasploit",
+    "SIEM","SOC","Splunk","Snort","Suricata",
+    "CEH","OSCP","CompTIA Security+","CISSP","ISO 27001",
+  ],
+};
+
+const SOFT_SKILL_OPTIONS = [
+  "Takım Çalışması","İletişim","Liderlik","Problem Çözme","Analitik Düşünme",
+  "Zaman Yönetimi","Sorumluluk","Uyum Sağlama","Proaktif","Agile / Scrum",
+];
+
+const EDUCATION_OPTIONS = ["Kontrol ve Otomasyon Mühendisliği", "Yapay Zeka ve Veri Mühendisliği", 
+  "Siber Güvenlik Mühendisliği", "Ziraat Mühendisliği", "Bilgisayar Mühendisliği", "Yazılım Mühendisliği", 
+  "Yönetim Bilişim Sistemleri", "Bilgisayar Bilimleri", "Elektrik-Elektronik Mühendisliği", 
+  "Elektronik ve Haberleşme Mühendisliği", "Endüstri Mühendisliği", "Makine Mühendisliği", "İnşaat Mühendisliği", 
+  "Mekatronik Mühendisliği"];
+
+// ── Yardımcı bileşenler ───────────────────────────────────────────────────────
+
+function SectionHeader({ icon, title, subtitle, count, points }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: 10,
+          background: "rgba(57,64,193,0.10)", color: "#3940c1",
+          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
+        }}>
+          {icon}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <Text strong style={{ fontSize: 15, color: "#111827" }}>{title}</Text>
+            {points !== undefined && (
+              <Tag style={{
+                borderRadius: 999, padding: "0 8px", fontSize: 11, fontWeight: 700,
+                background: "rgba(57,64,193,0.08)", color: "#3940c1", border: "1px solid #C7D2FE",
+              }}>
+                maks {points} puan
+              </Tag>
+            )}
+            {count > 0 && (
+              <Tag color="blue" style={{ borderRadius: 999, padding: "0 8px", fontSize: 12 }}>
+                {count} seçili
+              </Tag>
+            )}
+          </div>
+          {subtitle && <Text style={{ fontSize: 12, color: "#9CA3AF" }}>{subtitle}</Text>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Ana bileşen ───────────────────────────────────────────────────────────────
 
 export default function AnalysisDetailPage() {
   const navigate = useNavigate();
@@ -45,12 +133,9 @@ export default function AnalysisDetailPage() {
   const { data, isLoading, refetch } = useAnalysisById(id);
   const { data: filesData, isLoading: isFilesLoading } = useAnalysisFiles(id);
   const { mutateAsync: runAnalysisMutate, isPending: isRunning } = useRunAnalysis();
-
-  const {
-    data: lastRun,
-    isLoading: isLastRunLoading,
-    refetch: refetchLastRun,
-  } = useLastRun(id);
+  const { data: lastRun, isLoading: isLastRunLoading, refetch: refetchLastRun } = useLastRun(id);
+  const { data: runsData } = useAnalysisRuns(id);
+  const analysisRuns = runsData?.data || [];
 
   const analysis = data?.data;
   const analysisFiles = filesData?.data || [];
@@ -58,127 +143,17 @@ export default function AnalysisDetailPage() {
   const [api, contextHolder] = notification.useNotification();
   const [latestRunId, setLatestRunId] = useState(null);
 
-  const [selectedProfile, setSelectedProfile] = useState(null);
-  const [selectedHardSkills, setSelectedHardSkills] = useState([]);
+  // Form state
+  const [runName, setRunName] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [selectedSkills, setSelectedSkills] = useState([]);
+  const [customSkillInput, setCustomSkillInput] = useState("");
+  const [skillSearch, setSkillSearch] = useState("");
   const [selectedSoftSkills, setSelectedSoftSkills] = useState([]);
   const [selectedEducation, setSelectedEducation] = useState([]);
   const [minExperienceYears, setMinExperienceYears] = useState(0);
   const [requireProjectOrCertificate, setRequireProjectOrCertificate] = useState(false);
   const [useSemanticSimilarity, setUseSemanticSimilarity] = useState(true);
-  const [extraKeywords, setExtraKeywords] = useState("");
-  const [runName, setRunName] = useState("");
-
-  const profileTemplates = useMemo(
-    () => [
-      {
-        key: "frontend",
-        title: "Frontend Geliştirme",
-        description: "Arayüz, kullanıcı deneyimi ve modern web teknolojileri odaklı adaylar.",
-        hardSkills: ["Frontend Geliştirme", "Web Geliştirme"],
-        softSkills: ["İletişim", "Takım Çalışması"],
-        education: ["Bilgisayar Mühendisliği", "Yazılım Mühendisliği"],
-      },
-      {
-        key: "backend",
-        title: "Backend Geliştirme",
-        description: "API, sunucu tarafı geliştirme, veritabanı ve sistem mantığı odaklı adaylar.",
-        hardSkills: ["Backend Geliştirme", "Veritabanı", "Bulut ve DevOps"],
-        softSkills: ["Problem Çözme", "Analitik Düşünme"],
-        education: ["Bilgisayar Mühendisliği", "Yazılım Mühendisliği"],
-      },
-      {
-        key: "ai",
-        title: "Veri / Yapay Zeka",
-        description: "Veri analizi, makine öğrenmesi ve yapay zeka tarafında güçlü adaylar.",
-        hardSkills: ["Yapay Zeka", "Veri Analizi"],
-        softSkills: ["Analitik Düşünme", "Problem Çözme"],
-        education: ["Bilgisayar Bilimleri", "Bilgisayar Mühendisliği"],
-      },
-      {
-        key: "security",
-        title: "Siber Güvenlik",
-        description: "Güvenlik odaklı düşünen, savunma ve risk tarafında güçlü adaylar.",
-        hardSkills: ["Siber Güvenlik", "Bulut ve DevOps"],
-        softSkills: ["Sorumluluk", "Analitik Düşünme"],
-        education: ["Bilgisayar Mühendisliği", "Bilgisayar Bilimleri"],
-      },
-      {
-        key: "embedded",
-        title: "Gömülü Sistemler",
-        description: "Elektronik, devre, donanım ve sistem entegrasyonu odaklı adaylar.",
-        hardSkills: ["Gömülü Sistemler"],
-        softSkills: ["Problem Çözme", "Sorumluluk"],
-        education: ["Elektrik-Elektronik Mühendisliği", "Bilgisayar Mühendisliği"],
-      },
-      {
-        key: "general",
-        title: "Genel Teknik Profil",
-        description: "Geniş teknik altyapıya sahip, çok yönlü adayları değerlendirmek için.",
-        hardSkills: ["Web Geliştirme", "Backend Geliştirme", "Veritabanı"],
-        softSkills: ["Takım Çalışması", "İletişim"],
-        education: [
-          "Bilgisayar Mühendisliği",
-          "Yazılım Mühendisliği",
-          "Yönetim Bilişim Sistemleri",
-        ],
-      },
-    ],
-    []
-  );
-
-  const hardSkillOptions = useMemo(
-    () => [
-      "Web Geliştirme",
-      "Frontend Geliştirme",
-      "Backend Geliştirme",
-      "Veritabanı",
-      "Yapay Zeka",
-      "Veri Analizi",
-      "Mobil Uygulama",
-      "Gömülü Sistemler",
-      "Siber Güvenlik",
-      "Bulut ve DevOps",
-    ],
-    []
-  );
-
-  const softSkillOptions = useMemo(
-    () => [
-      "Takım Çalışması",
-      "İletişim",
-      "Liderlik",
-      "Problem Çözme",
-      "Analitik Düşünme",
-      "Zaman Yönetimi",
-      "Sorumluluk",
-      "Uyum Sağlama",
-    ],
-    []
-  );
-
-  const educationOptions = useMemo(
-    () => [
-      "Bilgisayar Mühendisliği",
-      "Yazılım Mühendisliği",
-      "Yönetim Bilişim Sistemleri",
-      "Bilgisayar Bilimleri",
-      "Elektrik-Elektronik Mühendisliği",
-      "Endüstri Mühendisliği",
-    ],
-    []
-  );
-
-  const getStatusColor = (status) => {
-    if (status === "Tamamlandı" || status === "Tamamlandi") return "green";
-    if (status === "Bekliyor") return "orange";
-    return "blue";
-  };
-
-  const getStatusText = (status) => {
-    if (status === "Tamamlandı" || status === "Tamamlandi") return "Tamamlandı";
-    if (status === "Bekliyor") return "Onay Bekliyor";
-    return status || "Bilinmiyor";
-  };
 
   const isAnalysisCompleted =
     analysis?.status === "Tamamlandi" || analysis?.status === "Tamamlandı";
@@ -186,50 +161,102 @@ export default function AnalysisDetailPage() {
   const resolvedLastRunId =
     latestRunId || lastRun?.data?.id || lastRun?.id || null;
 
-  const handleSelectProfile = (profile) => {
-    setSelectedProfile(profile.key);
-    setSelectedHardSkills(profile.hardSkills || []);
-    setSelectedSoftSkills(profile.softSkills || []);
-    setSelectedEducation(profile.education || []);
+  // Seçili kategorilerin union beceri listesi
+  const filteredTechnologies = useMemo(() => {
+    const all = selectedCategories.length > 0
+      ? [...new Set(selectedCategories.flatMap((k) => TECHNOLOGY_MAP[k] || []))]
+      : [...new Set(Object.values(TECHNOLOGY_MAP).flat())];
+    if (!skillSearch.trim()) return all;
+    return all.filter((t) => t.toLowerCase().includes(skillSearch.toLowerCase()));
+  }, [selectedCategories, skillSearch]);
+
+  // Kategori toggle (çoklu seçim — seçili becerileri korur)
+  const toggleCategory = (key) => {
+    setSelectedCategories((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+    setSkillSearch("");
   };
 
+  // Skill toggle
+  const toggleSkill = (skill) => {
+    setSelectedSkills((prev) =>
+      prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]
+    );
+  };
+
+  // Custom skill ekle
+  const addCustomSkill = () => {
+    const val = customSkillInput.trim();
+    if (!val || selectedSkills.includes(val)) return;
+    setSelectedSkills((prev) => [...prev, val]);
+    setCustomSkillInput("");
+  };
+
+  // Puan dağılımı — aktif kriterlere göre etkin ağırlık (toplam 100)
+  const scoringItems = useMemo(() => {
+    const semOn  = useSemanticSimilarity;
+    const projOn = requireProjectOrCertificate;
+    const softOn = selectedSoftSkills.length > 0;
+    const eduOn  = selectedEducation.length > 0;
+    const maxAchievable = (
+      20
+      + (softOn ? 15 : 0)
+      + (eduOn  ? 10 : 0)
+      + 20
+      + (semOn  ? 25 : 0)
+      + (projOn ? 10 : 0)
+    );
+    const eff = (raw) => Math.round((raw / maxAchievable) * 100);
+    return [
+      { label: "Teknik Beceriler", raw: 20, active: true    },
+      { label: "Soft Skills",      raw: 15, active: softOn  },
+      { label: "Eğitim",           raw: 10, active: eduOn   },
+      { label: "Deneyim",          raw: 20, active: true    },
+      { label: "Proje/Sertifika",  raw: 10, active: projOn  },
+      { label: "Anlamsal Uyum",    raw: 25, active: semOn   },
+    ].map((item) => ({ ...item, pts: item.active ? eff(item.raw) : null }));
+  }, [useSemanticSimilarity, requireProjectOrCertificate, selectedSoftSkills, selectedEducation]);
+
+  // Tamamlanma yüzdesi
+  const completionPercent = useMemo(() => {
+    let score = 0;
+    if (selectedSkills.length >= 3) score += 40;
+    else if (selectedSkills.length > 0) score += 15;
+    if (selectedSoftSkills.length > 0) score += 15;
+    if (selectedEducation.length > 0) score += 15;
+    if (minExperienceYears > 0) score += 15;
+    if (requireProjectOrCertificate) score += 15;
+    return Math.min(score, 100);
+  }, [selectedSkills, selectedSoftSkills, selectedEducation, minExperienceYears, requireProjectOrCertificate]);
+
+  const progressColor =
+    completionPercent >= 70 ? "#10B981" : completionPercent >= 40 ? "#F59E0B" : "#3940c1";
+
   const handleRunAnalysis = async () => {
+    if (selectedSkills.length === 0) {
+      api.warning({ message: "En az bir teknik beceri seçmelisiniz.", placement: "topRight" });
+      return;
+    }
     try {
       const payload = {
-        runName: runName?.trim() || "Yeni Analiz Çalıştırması",
-        hardSkills: selectedHardSkills,
+        runName: runName?.trim() || "Yeni Analiz",
+        hardSkills: selectedSkills,
         softSkills: selectedSoftSkills,
         educationRequirements: selectedEducation,
-        minExperienceYears: minExperienceYears || 0,
+        minExperienceYears: Number(minExperienceYears) || 0,
         requireProjectOrCertificate,
         useSemanticSimilarity,
-        extraKeywords: extraKeywords
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
       };
-
-      const response = await runAnalysisMutate({
-        analysisId: id,
-        payload,
-      });
-
+      const response = await runAnalysisMutate({ analysisId: id, payload });
       const runId = response?.data?.runId || response?.data?.id || null;
       setLatestRunId(runId);
-
       await Promise.all([refetch(), refetchLastRun()]);
-
-      api.success({
-        message: "Analiz Başlatıldı",
-        description: "Analiz tamamlandı. Sonuçları görüntüleyebilirsin.",
-        placement: "topRight",
-      });
+      api.success({ message: "Analiz tamamlandı!", description: "Sonuçları görüntüleyebilirsiniz.", placement: "topRight" });
     } catch (error) {
-      console.error(error);
       api.error({
-        message: "Analiz Başlatılamadı",
-        description:
-          error?.response?.data?.message || "Analiz çalıştırılırken bir hata oluştu.",
+        message: "Analiz başlatılamadı",
+        description: error?.response?.data?.message || "Bir hata oluştu.",
         placement: "topRight",
       });
     }
@@ -238,663 +265,640 @@ export default function AnalysisDetailPage() {
   const handleShowResults = async () => {
     try {
       let runId = resolvedLastRunId;
-
       if (!runId) {
         const refreshed = await refetchLastRun();
         runId = refreshed?.data?.data?.id || refreshed?.data?.id || null;
       }
-
-      if (runId) {
-        navigate(`/analysis-runs/${runId}/results`);
-        return;
-      }
-
-      api.info({
-        message: "Henüz analiz çalıştırılmamış",
-      });
-    } catch (error) {
-      console.error(error);
-      api.error({
-        message: "Sonuçlar açılamadı",
-        description: "Son çalıştırma bilgisi alınırken bir hata oluştu.",
-        placement: "topRight",
-      });
+      if (runId) { navigate(`/analizler/${runId}/results`); return; }
+      api.info({ message: "Henüz analiz çalıştırılmamış." });
+    } catch {
+      api.error({ message: "Sonuçlar açılamadı." });
     }
   };
 
+  const getStatusColor = (s) => {
+    if (s === "Tamamlandı" || s === "Tamamlandi") return "#10B981";
+    if (s === "Bekliyor") return "#F59E0B";
+    return "#3940c1";
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
-    <div className="min-h-screen bg-[#f7f8fc]">
+    <div style={{ minHeight: "100vh", background: "#F7F8FC" }}>
       {contextHolder}
       <LoginNavbar />
 
-      <div style={{ paddingTop: 120, paddingBottom: 50 }}>
+      <div style={{ paddingTop: 100, paddingBottom: 60 }}>
         <Row justify="center">
-          <Col xs={22} md={21} lg={19} xl={17}>
+          <Col xs={23} md={22} lg={21} xl={20}>
+
+            {/* Geri butonu */}
             <Button
               icon={<ArrowLeftOutlined />}
               onClick={() => navigate("/analizler")}
-              style={{
-                marginBottom: 20,
-                borderRadius: 999,
-                height: 42,
-                padding: "0 18px",
-              }}
+              style={{ marginBottom: 20, borderRadius: 999, height: 40 }}
             >
               Analizlere Dön
             </Button>
 
             {isLoading ? (
-              <div style={{ textAlign: "center", padding: "60px 0" }}>
-                <Spin size="large" />
-              </div>
+              <div style={{ textAlign: "center", padding: 80 }}><Spin size="large" /></div>
             ) : !analysis ? (
-              <Card
-                style={{
-                  borderRadius: 24,
-                  border: "1px solid #eef0f6",
-                  boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
-                }}
-              >
-                <Empty description="Analiz bulunamadı" />
+              <Card style={{ borderRadius: 24, textAlign: "center", padding: 40 }}>
+                <Empty description="Analiz bulunamadı." />
               </Card>
             ) : (
-              <Row gutter={[24, 24]} align="top">
-                <Col xs={24} lg={16}>
-                  <div style={{ display: "grid", gap: 24 }}>
-                    <Card
-                      style={{
-                        borderRadius: 28,
-                        border: "1px solid #e9edf5",
-                        boxShadow: "0 18px 40px rgba(0,0,0,0.06)",
-                      }}
-                      styles={{ body: { padding: 28 } }}
-                    >
-                      <div style={{ display: "grid", gap: 18 }}>
-                        <div>
-                          <Text
-                            style={{
-                              color: "#3940c1",
-                              fontWeight: 700,
-                              fontSize: 13,
-                              letterSpacing: 0.4,
-                            }}
-                          >
-                            ANALİZ ÖZETİ
-                          </Text>
-                          <Title level={2} style={{ margin: "8px 0 6px", color: "#111827" }}>
-                            {analysis.analysisName}
-                          </Title>
-                          <Text style={{ color: "#6b7280", fontSize: 16 }}>
-                            {analysis.positionName}
-                          </Text>
-                        </div>
-
-                        <Paragraph
-                          style={{
-                            color: "#4b5563",
-                            lineHeight: 1.8,
-                            marginBottom: 0,
-                          }}
+              <>
+                {/* ── Üst bilgi bandı ─────────────────────────────────── */}
+                <Card
+                  style={{ borderRadius: 20, marginBottom: 24, border: "1px solid #E9EDF5", boxShadow: "0 4px 16px rgba(0,0,0,0.05)" }}
+                  styles={{ body: { padding: "16px 24px" } }}
+                >
+                  <Row align="middle" gutter={[16, 8]}>
+                    <Col flex="auto">
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                        <Text strong style={{ fontSize: 18, color: "#111827" }}>{analysis.analysisName}</Text>
+                        <Tag style={{ borderRadius: 999, padding: "2px 10px" }}>{analysis.positionName}</Tag>
+                        <Tag
+                          color={isAnalysisCompleted ? "success" : "warning"}
+                          style={{ borderRadius: 999, padding: "2px 10px" }}
                         >
-                          {analysis.description || "Bu analiz için açıklama eklenmemiş."}
-                        </Paragraph>
-
-                        <Divider style={{ margin: "4px 0" }} />
-
-                        <Row gutter={[18, 18]}>
-                          <Col xs={24} md={12}>
-                            <Card
-                              style={{
-                                borderRadius: 18,
-                                background: "#f8faff",
-                                border: "1px solid #e8edff",
-                                boxShadow: "none",
-                              }}
-                            >
-                              <Space align="center">
-                                <CalendarOutlined style={{ color: "#3940c1", fontSize: 18 }} />
-                                <div>
-                                  <Text strong style={{ display: "block" }}>
-                                    Oluşturulma Tarihi
-                                  </Text>
-                                  <Text style={{ color: "#6b7280" }}>
-                                    {new Date(analysis.createdAt).toLocaleString("tr-TR")}
-                                  </Text>
-                                </div>
-                              </Space>
-                            </Card>
-                          </Col>
-
-                          <Col xs={24} md={12}>
-                            <Card
-                              style={{
-                                borderRadius: 18,
-                                background: "#f8faff",
-                                border: "1px solid #e8edff",
-                                boxShadow: "none",
-                              }}
-                            >
-                              <Space align="center">
-                                <FolderOpenOutlined style={{ color: "#3940c1", fontSize: 18 }} />
-                                <div>
-                                  <Text strong style={{ display: "block" }}>
-                                    CV Sayısı
-                                  </Text>
-                                  <Text style={{ color: "#6b7280" }}>
-                                    {analysis.cvCount} CV
-                                  </Text>
-                                </div>
-                              </Space>
-                            </Card>
-                          </Col>
-
-                          <Col xs={24} md={12}>
-                            <Card
-                              style={{
-                                borderRadius: 18,
-                                background: "#f8faff",
-                                border: "1px solid #e8edff",
-                                boxShadow: "none",
-                              }}
-                            >
-                              <Space align="center">
-                                <UserOutlined style={{ color: "#3940c1", fontSize: 18 }} />
-                                <div>
-                                  <Text strong style={{ display: "block" }}>
-                                    Oluşturan Kullanıcı
-                                  </Text>
-                                  <Text style={{ color: "#6b7280" }}>
-                                    {analysis.userFullName}
-                                  </Text>
-                                </div>
-                              </Space>
-                            </Card>
-                          </Col>
-
-                          <Col xs={24} md={12}>
-                            <Card
-                              style={{
-                                borderRadius: 18,
-                                background: "#f8faff",
-                                border: "1px solid #e8edff",
-                                boxShadow: "none",
-                              }}
-                            >
-                              <Space align="center">
-                                <BarChartOutlined style={{ color: "#3940c1", fontSize: 18 }} />
-                                <div>
-                                  <Text strong style={{ display: "block" }}>
-                                    Durum
-                                  </Text>
-                                  <Tag color={getStatusColor(analysis.status)} style={{ marginTop: 4 }}>
-                                    {getStatusText(analysis.status)}
-                                  </Tag>
-                                </div>
-                              </Space>
-                            </Card>
-                          </Col>
-                        </Row>
+                          {isAnalysisCompleted ? "Tamamlandı" : "Bekliyor"}
+                        </Tag>
                       </div>
-                    </Card>
+                      {analysis.description && (
+                        <Text style={{ color: "#6B7280", fontSize: 13, marginTop: 4, display: "block" }}>
+                          {analysis.description}
+                        </Text>
+                      )}
+                    </Col>
+                    <Col>
+                      <Space split={<Divider type="vertical" />} style={{ color: "#9CA3AF", fontSize: 13 }}>
+                        <Space size={4}><FolderOpenOutlined />{analysis.cvCount} CV</Space>
+                        <Space size={4}><UserOutlined />{analysis.userFullName}</Space>
+                        <Space size={4}><CalendarOutlined />{new Date(analysis.createdAt).toLocaleDateString("tr-TR")}</Space>
+                      </Space>
+                    </Col>
+                  </Row>
+                </Card>
 
-                    {!isAnalysisCompleted ? (
-                      <Card
-                        style={{
-                          borderRadius: 28,
-                          border: "1px solid #e9edf5",
-                          boxShadow: "0 18px 40px rgba(0,0,0,0.06)",
-                        }}
-                        styles={{ body: { padding: 28 } }}
-                      >
-                        <div style={{ display: "grid", gap: 28 }}>
-                          <div>
-                            <Text
-                              style={{
-                                color: "#3940c1",
-                                fontWeight: 700,
-                                fontSize: 13,
-                                letterSpacing: 0.4,
-                              }}
-                            >
-                              ADIM 1
-                            </Text>
-                            <Title level={3} style={{ margin: "8px 0 8px", color: "#111827" }}>
-                              Hazır Profil Seç
-                            </Title>
-                            <Paragraph style={{ color: "#6b7280", marginBottom: 0 }}>
-                              Hızlı başlamak için aşağıdan bir analiz profili seçebilir, ardından detayları istersen özelleştirebilirsin.
+                {/* ── Ana içerik ──────────────────────────────────────── */}
+                <Row gutter={[24, 24]} align="top">
+
+                  {/* ── Sol: Form ─────────────────────────────────────── */}
+                  <Col xs={24} lg={16}>
+                    {isAnalysisCompleted ? (
+                      <Card style={{ borderRadius: 24, border: "1px solid #E9EDF5", boxShadow: "0 8px 24px rgba(0,0,0,0.06)" }}
+                        styles={{ body: { padding: 32 } }}>
+                        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                          <div style={{ textAlign: "center" }}>
+                            <CheckCircleOutlined style={{ fontSize: 48, color: "#10B981", marginBottom: 12 }} />
+                            <Title level={3} style={{ margin: 0 }}>Analiz Tamamlandı</Title>
+                            <Paragraph style={{ color: "#6B7280", marginTop: 8 }}>
+                              Aday sıralaması ve puanlar hazır. Sonuçları inceleyebilirsin.
                             </Paragraph>
                           </div>
-                              <div>
-                                <Text strong style={{ display: "block", marginBottom: 8 }}>
-                                  Çalıştırma Adı
-                                </Text>
-                                <Input
-                                  value={runName}
-                                  onChange={(e) => setRunName(e.target.value)}
-                                  placeholder="Örn: Frontend Aday Analizi - Mart"
-                                  style={{ borderRadius: 12, height: 44 }}
-                                />
-                              </div>
-                          <Row gutter={[16, 16]}>
-                            {profileTemplates.map((profile) => {
-                              const active = selectedProfile === profile.key;
-                              return (
-                                <Col xs={24} md={12} xl={8} key={profile.key}>
-                                  <Card
-                                    onClick={() => handleSelectProfile(profile)}
-                                    style={{
-                                      borderRadius: 20,
-                                      cursor: "pointer",
-                                      border: active
-                                        ? "1px solid #3940c1"
-                                        : "1px solid #e7ebf3",
-                                      background: active
-                                        ? "rgba(57,64,193,0.05)"
-                                        : "#fff",
-                                      boxShadow: active
-                                        ? "0 10px 28px rgba(57,64,193,0.12)"
-                                        : "0 6px 14px rgba(0,0,0,0.03)",
-                                      height: "100%",
-                                    }}
-                                    styles={{ body: { padding: 18 } }}
-                                  >
-                                    <div style={{ display: "grid", gap: 10 }}>
-                                      <div
-                                        style={{
-                                          width: 42,
-                                          height: 42,
-                                          borderRadius: 14,
-                                          background:
-                                            "linear-gradient(135deg, rgba(57,64,193,0.12), rgba(255,107,107,0.12))",
-                                          display: "flex",
-                                          alignItems: "center",
-                                          justifyContent: "center",
-                                          color: "#3940c1",
-                                          fontSize: 18,
-                                        }}
-                                      >
-                                        {active ? <CheckCircleOutlined /> : <AppstoreOutlined />}
-                                      </div>
-
-                                      <Text strong style={{ fontSize: 15, color: "#111827" }}>
-                                        {profile.title}
-                                      </Text>
-
-                                      <Text style={{ color: "#6b7280", lineHeight: 1.7 }}>
-                                        {profile.description}
-                                      </Text>
-                                    </div>
-                                  </Card>
-                                </Col>
-                              );
-                            })}
-                          </Row>
-
-                          <Divider style={{ margin: 0 }} />
-
-                          <div>
-                            <Text
-                              style={{
-                                color: "#3940c1",
-                                fontWeight: 700,
-                                fontSize: 13,
-                                letterSpacing: 0.4,
-                              }}
-                            >
-                              ADIM 2
-                            </Text>
-                            <Title level={3} style={{ margin: "8px 0 8px", color: "#111827" }}>
-                              Detaylı Kriterleri Belirle
-                            </Title>
-                            <Paragraph style={{ color: "#6b7280", marginBottom: 0 }}>
-                              Adaylarda özellikle görmek istediğin teknik alanları, kişisel yetkinlikleri ve eğitim beklentisini seç.
-                            </Paragraph>
-                          </div>
-
-                          <SelectableTagGroup
-                            title="Teknik Alan Öncelikleri"
-                            options={hardSkillOptions}
-                            selectedValues={selectedHardSkills}
-                            onChange={setSelectedHardSkills}
-                          />
-
-                          <SelectableTagGroup
-                            title="Kişisel Yetkinlik Öncelikleri"
-                            options={softSkillOptions}
-                            selectedValues={selectedSoftSkills}
-                            onChange={setSelectedSoftSkills}
-                          />
-
-                          <SelectableTagGroup
-                            title="Tercih Edilen Eğitim Alanları"
-                            options={educationOptions}
-                            selectedValues={selectedEducation}
-                            onChange={setSelectedEducation}
-                          />
-
-                          <Divider style={{ margin: 0 }} />
-
-                          <div>
-                            <Text
-                              style={{
-                                color: "#3940c1",
-                                fontWeight: 700,
-                                fontSize: 13,
-                                letterSpacing: 0.4,
-                              }}
-                            >
-                              ADIM 3
-                            </Text>
-                            <Title level={3} style={{ margin: "8px 0 8px", color: "#111827" }}>
-                              Ek Değerlendirme Tercihleri
-                            </Title>
-                            <Paragraph style={{ color: "#6b7280", marginBottom: 0 }}>
-                              Deneyim, proje ve açıklama uyumu gibi ek kriterleri belirleyerek daha güçlü bir puanlama yapabilirsin.
-                            </Paragraph>
-                          </div>
-
-                          <div>
-                            <Text strong style={{ display: "block", marginBottom: 8 }}>
-                              Beklenen Minimum Deneyim
-                            </Text>
-                            <Text style={{ display: "block", marginBottom: 8, color: "#6b7280" }}>
-                              Adayın en az kaç yıllık deneyime sahip olmasını istiyorsun?
-                            </Text>
-                            <InputNumber
-                              min={0}
-                              max={30}
-                              value={minExperienceYears}
-                              onChange={(value) => setMinExperienceYears(value || 0)}
-                              style={{ width: 220 }}
-                            />
-                          </div>
-
-                          <div style={{ display: "grid", gap: 12 }}>
-                            <Card
-                              onClick={() =>
-                                setRequireProjectOrCertificate(!requireProjectOrCertificate)
-                              }
-                              style={{
-                                borderRadius: 16,
-                                cursor: "pointer",
-                                border: requireProjectOrCertificate
-                                  ? "1px solid #3940c1"
-                                  : "1px solid #e5e7eb",
-                                background: requireProjectOrCertificate
-                                  ? "rgba(57,64,193,0.06)"
-                                  : "#fff",
-                                boxShadow: "none",
-                              }}
-                              styles={{ body: { padding: 16 } }}
-                            >
-                              <Space direction="vertical" size={4}>
-                                <Text strong>
-                                  Projeler ve sertifikalar değerlendirmede etkili olsun
-                                </Text>
-                                <Text style={{ color: "#6b7280" }}>
-                                  Adayın yaptığı projeler veya aldığı sertifikalar puanlamaya dahil edilsin.
-                                </Text>
-                              </Space>
-                            </Card>
-
-                            <Card
-                              onClick={() => setUseSemanticSimilarity(!useSemanticSimilarity)}
-                              style={{
-                                borderRadius: 16,
-                                cursor: "pointer",
-                                border: useSemanticSimilarity
-                                  ? "1px solid #3940c1"
-                                  : "1px solid #e5e7eb",
-                                background: useSemanticSimilarity
-                                  ? "rgba(57,64,193,0.06)"
-                                  : "#fff",
-                                boxShadow: "none",
-                              }}
-                              styles={{ body: { padding: 16 } }}
-                            >
-                              <Space direction="vertical" size={4}>
-                                <Text strong>İlan açıklamasına genel uyum değerlendirilsin</Text>
-                                <Text style={{ color: "#6b7280" }}>
-                                  CV içeriği ile açıklama metni arasındaki genel yakınlık da puanlamaya dahil edilsin.
-                                </Text>
-                              </Space>
-                            </Card>
-                          </div>
-                          <div>
-                            <Text strong style={{ display: "block", marginBottom: 8 }}>
-                              Ek Öncelikli Kelimeler
-                            </Text>
-                            <Text style={{ display: "block", marginBottom: 8, color: "#6b7280" }}>
-                              Özellikle aranmasını istediğin kelimeleri virgül ile ayırarak yazabilirsin.
-                            </Text>
-                            <TextArea
-                              rows={3}
-                              value={extraKeywords}
-                              onChange={(e) => setExtraKeywords(e.target.value)}
-                              placeholder="Örn: React, SQL, staj, takım çalışması"
-                              style={{ borderRadius: 12 }}
-                            />
-                          </div>
-
                           <Button
-                            type="primary"
-                            loading={isRunning}
-                            onClick={handleRunAnalysis}
-                            icon={<RocketOutlined />}
-                            style={{
-                              borderRadius: 999,
-                              height: 48,
-                              padding: "0 24px",
-                              background: "#FF6B6B",
-                              border: "none",
-                              fontWeight: 600,
-                              boxShadow: "0 10px 24px rgba(255,107,107,0.25)",
-                            }}
-                          >
-                            Analizi Başlat
-                          </Button>
-                        </div>
-                      </Card>
-                    ) : (
-                      <Card
-                        style={{
-                          borderRadius: 28,
-                          border: "1px solid #e9edf5",
-                          boxShadow: "0 18px 40px rgba(0,0,0,0.06)",
-                        }}
-                        styles={{ body: { padding: 28 } }}
-                      >
-                        <Space direction="vertical" size={18} style={{ width: "100%" }}>
-                          <div>
-                            <Title level={3} style={{ margin: 0, color: "#111827" }}>
-                              Analiz Tamamlandı
-                            </Title>
-                            <Paragraph style={{ color: "#6b7280", marginTop: 8, marginBottom: 0 }}>
-                              Bu analiz için değerlendirme tamamlandı. Sonuç ekranından aday sıralamasını ve puanları inceleyebilirsin.
-                            </Paragraph>
-                          </div>
-
-                          <Space wrap>
-                            <Tag color="green">Analiz Bitti</Tag>
-                            <Tag color="blue">{analysis?.cvCount || 0} CV</Tag>
-                          </Space>
-
-                          <Button
-                            type="primary"
-                            loading={isLastRunLoading}
+                            type="primary" size="large" loading={isLastRunLoading}
                             onClick={handleShowResults}
-                            style={{
-                              borderRadius: 999,
-                              height: 46,
-                              padding: "0 24px",
-                              background: "#3940c1",
-                              border: "none",
-                              fontWeight: 600,
-                            }}
+                            style={{ borderRadius: 999, height: 50, width: "100%", background: "#3940c1", border: "none", fontWeight: 600 }}
                           >
-                            Sonuçları Göster
+                            Sonuçları Görüntüle
                           </Button>
                         </Space>
                       </Card>
-                    )}
-                  </div>
-                </Col>
-
-                <Col xs={24} lg={8}>
-                  <div style={{ display: "grid", gap: 24, position: "sticky", top: 110 }}>
-                    <Card
-                      style={{
-                        borderRadius: 24,
-                        border: "1px solid #e9edf5",
-                        boxShadow: "0 18px 40px rgba(0,0,0,0.06)",
-                      }}
-                      styles={{ body: { padding: 24 } }}
-                    >
-                      <Title level={4} style={{ marginTop: 0, marginBottom: 12 }}>
-                        Yüklenen CV Dosyaları
-                      </Title>
-
-                      {isFilesLoading ? (
-                        <div style={{ textAlign: "center", padding: "20px 0" }}>
-                          <Spin />
+                    ) : (
+                      <Card
+                        style={{ borderRadius: 24, border: "1px solid #E9EDF5", boxShadow: "0 8px 24px rgba(0,0,0,0.06)" }}
+                        styles={{ body: { padding: 32 } }}
+                      >
+                        {/* Tamamlanma çubuğu */}
+                        <div style={{ marginBottom: 28 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                            <Text style={{ fontSize: 13, color: "#6B7280" }}>Kriter doluluğu</Text>
+                            <Text strong style={{ fontSize: 13, color: progressColor }}>{completionPercent}%</Text>
+                          </div>
+                          <Progress percent={completionPercent} showInfo={false}
+                            strokeColor={progressColor} trailColor="#EEF2FF" strokeWidth={6} />
                         </div>
-                      ) : analysisFiles.length === 0 ? (
-                        <Empty description="Dosya bulunamadı" />
-                      ) : (
-                        <div
-                          style={{
-                            display: "grid",
-                            gap: 12,
-                            maxHeight: analysisFiles.length > 3 ? 260 : "unset",
-                            overflowY: analysisFiles.length > 3 ? "auto" : "visible",
-                            paddingRight: analysisFiles.length > 3 ? 6 : 0,
-                          }}
-                        >
-                          {analysisFiles.map((file) => (
-                            <div
-                              key={file.id}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 12,
-                                padding: "12px 14px",
-                                borderRadius: 16,
-                                background: "#f8faff",
-                                border: "1px solid #e8edff",
-                              }}
-                            >
-                              <FilePdfOutlined style={{ color: "#3940c1", fontSize: 18 }} />
-                              <div style={{ minWidth: 0 }}>
-                                <Text
-                                  strong
+
+                        {/* ── BÖLÜM 1: Analiz Adı ─────────────────────── */}
+                        <SectionHeader
+                          icon={<BookOutlined />}
+                          title="Analiz Çalıştırma Adı"
+                          subtitle="İsteğe bağlı — daha sonra tanımlamanızı kolaylaştırır"
+                        />
+                        <Input
+                          value={runName}
+                          onChange={(e) => setRunName(e.target.value)}
+                          placeholder="Örn: Backend Java Senior — Mayıs 2025"
+                          style={{ borderRadius: 12, height: 44, marginBottom: 28 }}
+                        />
+
+                        <Divider style={{ margin: "0 0 28px" }} />
+
+                        {/* ── BÖLÜM 2: Kategori ─────────────────────────── */}
+                        <SectionHeader
+                          icon={<AppstoreOutlined />}
+                          title="Teknoloji Filtresi"
+                          subtitle="Birden fazla seçebilirsiniz — boş bırakırsanız tüm beceriler listelenir"
+                          count={selectedCategories.length}
+                        />
+                        <Row gutter={[10, 10]} style={{ marginBottom: 28 }}>
+                          {CATEGORY_LIST.map((cat) => {
+                            const active = selectedCategories.includes(cat.key);
+                            return (
+                              <Col xs={12} sm={8} key={cat.key}>
+                                <div
+                                  onClick={() => toggleCategory(cat.key)}
                                   style={{
-                                    display: "block",
-                                    whiteSpace: "nowrap",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    maxWidth: 220,
+                                    border: active ? `2px solid ${cat.color}` : "1.5px solid #E5E7EB",
+                                    borderRadius: 16,
+                                    padding: "12px 16px",
+                                    cursor: "pointer",
+                                    background: active ? `${cat.color}12` : "#fff",
+                                    display: "flex", alignItems: "center", gap: 10,
+                                    transition: "all 0.18s",
                                   }}
                                 >
-                                  {file.originalFileName}
-                                </Text>
-                                <Text style={{ color: "#6b7280", fontSize: 12 }}>
-                                  PDF dosyası
-                                </Text>
-                              </div>
+                                  <div style={{
+                                    width: 34, height: 34, borderRadius: 10,
+                                    background: active ? cat.color : "#F3F4F6",
+                                    color: active ? "#fff" : "#6B7280",
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    fontSize: 16, flexShrink: 0,
+                                  }}>
+                                    {active ? <CheckCircleOutlined /> : cat.icon}
+                                  </div>
+                                  <Text strong style={{ color: active ? cat.color : "#374151", fontSize: 14 }}>
+                                    {cat.label}
+                                  </Text>
+                                </div>
+                              </Col>
+                            );
+                          })}
+                        </Row>
+
+                        <Divider style={{ margin: "0 0 28px" }} />
+
+                        {/* ── BÖLÜM 3: Teknik Beceriler ────────────────── */}
+                        <SectionHeader
+                          icon={<CodeOutlined />}
+                          title="Teknik Beceriler"
+                          subtitle="Pozisyon için gerekli dil ve teknolojileri seçin (çok seçimli)"
+                          count={selectedSkills.length}
+                          points={20}
+                        />
+
+                        {/* Seçili skill'ler */}
+                        {selectedSkills.length > 0 && (
+                          <div style={{ marginBottom: 12, padding: "12px 16px", borderRadius: 12, background: "#EEF2FF", border: "1px solid #C7D2FE" }}>
+                            <Text style={{ fontSize: 12, color: "#6366F1", fontWeight: 600, display: "block", marginBottom: 8 }}>
+                              SEÇİLİ BECERİLER
+                            </Text>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                              {selectedSkills.map((s) => (
+                                <Tag
+                                  key={s}
+                                  closable
+                                  onClose={() => toggleSkill(s)}
+                                  style={{
+                                    borderRadius: 999, padding: "4px 10px",
+                                    background: "#3940c1", color: "#fff",
+                                    border: "none", fontSize: 13, fontWeight: 500,
+                                  }}
+                                  closeIcon={<CloseOutlined style={{ fontSize: 10, color: "#fff" }} />}
+                                >
+                                  {s}
+                                </Tag>
+                              ))}
+                              <Tag
+                                onClick={() => setSelectedSkills([])}
+                                style={{ borderRadius: 999, cursor: "pointer", padding: "4px 10px", color: "#EF4444", borderColor: "#EF4444" }}
+                              >
+                                Tümünü Temizle
+                              </Tag>
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </Card>
-
-                        {!isAnalysisCompleted && (
-                          <Card
-                            style={{
-                              borderRadius: 24,
-                              border: "1px solid #e9edf5",
-                              boxShadow: "0 18px 40px rgba(0,0,0,0.06)",
-                            }}
-                            styles={{ body: { padding: 24 } }}
-                          >
-                            <Title level={4} style={{ marginTop: 0, marginBottom: 12 }}>
-                              Seçili Kriter Özeti
-                            </Title>
-
-                            <div style={{ display: "grid", gap: 12 }}>
-                              <div>
-                                <Text strong style={{ display: "block" }}>
-                                  Hazır Profil
-                                </Text>
-                                <Text style={{ color: "#6b7280" }}>
-                                  {profileTemplates.find((x) => x.key === selectedProfile)?.title || "Seçilmedi"}
-                                </Text>
-                              </div>
-
-                              <div>
-                                <Text strong style={{ display: "block" }}>
-                                  Teknik Alanlar
-                                </Text>
-                                <Text style={{ color: "#6b7280" }}>
-                                  {selectedHardSkills.length > 0
-                                    ? selectedHardSkills.join(", ")
-                                    : "Seçilmedi"}
-                                </Text>
-                              </div>
-
-                              <div>
-                                <Text strong style={{ display: "block" }}>
-                                  Kişisel Yetkinlikler
-                                </Text>
-                                <Text style={{ color: "#6b7280" }}>
-                                  {selectedSoftSkills.length > 0
-                                    ? selectedSoftSkills.join(", ")
-                                    : "Seçilmedi"}
-                                </Text>
-                              </div>
-
-                              <div>
-                                <Text strong style={{ display: "block" }}>
-                                  Eğitim Alanları
-                                </Text>
-                                <Text style={{ color: "#6b7280" }}>
-                                  {selectedEducation.length > 0
-                                    ? selectedEducation.join(", ")
-                                    : "Seçilmedi"}
-                                </Text>
-                              </div>
-
-                              <div>
-                                <Text strong style={{ display: "block" }}>
-                                  Minimum Deneyim
-                                </Text>
-                                <Text style={{ color: "#6b7280" }}>
-                                  {minExperienceYears} yıl
-                                </Text>
-                              </div>
-
-                              <div>
-                                <Text strong style={{ display: "block" }}>
-                                  Ek Ölçütler
-                                </Text>
-                                <Text style={{ color: "#6b7280" }}>
-                                  {[
-                                    requireProjectOrCertificate ? "Proje/Sertifika dahil" : null,
-                                    useSemanticSimilarity ? "Açıklama uyumu aktif" : null,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" • ") || "Varsayılan"}
-                                </Text>
-                              </div>
-                            </div>
-                          </Card>
+                          </div>
                         )}
-                  </div>
-                </Col>
-              </Row>
+
+                        {/* Arama */}
+                        <Input
+                          prefix={<SearchOutlined style={{ color: "#9CA3AF" }} />}
+                          placeholder="Teknoloji ara..."
+                          value={skillSearch}
+                          onChange={(e) => setSkillSearch(e.target.value)}
+                          style={{ borderRadius: 12, height: 40, marginBottom: 10 }}
+                          allowClear
+                        />
+
+                        {/* Teknoloji grid */}
+                        <div style={{
+                          display: "flex", flexWrap: "wrap", gap: 8,
+                          maxHeight: 200, overflowY: "auto", paddingRight: 4, marginBottom: 12,
+                        }}>
+                          {filteredTechnologies.map((tech) => {
+                            const sel = selectedSkills.includes(tech);
+                            return (
+                              <Tag
+                                key={tech}
+                                onClick={() => toggleSkill(tech)}
+                                style={{
+                                  cursor: "pointer", borderRadius: 999,
+                                  padding: "6px 14px", fontSize: 13,
+                                  border: sel ? "1.5px solid #3940c1" : "1.5px solid #E5E7EB",
+                                  background: sel ? "rgba(57,64,193,0.10)" : "#FAFAFA",
+                                  color: sel ? "#3940c1" : "#4B5563",
+                                  fontWeight: sel ? 600 : 400,
+                                  transition: "all 0.15s",
+                                  userSelect: "none",
+                                }}
+                              >
+                                {sel && "✓ "}{tech}
+                              </Tag>
+                            );
+                          })}
+                          {filteredTechnologies.length === 0 && (
+                            <Text style={{ color: "#9CA3AF", fontSize: 13 }}>Sonuç bulunamadı</Text>
+                          )}
+                        </div>
+
+                        {/* Custom skill ekle */}
+                        <Space.Compact style={{ display: "flex" }}>
+                          <Input
+                            value={customSkillInput}
+                            onChange={(e) => setCustomSkillInput(e.target.value)}
+                            onPressEnter={addCustomSkill}
+                            placeholder="Listede olmayan beceri ekle..."
+                            style={{ flex: 1, height: 40 }}
+                          />
+                          <Button
+                            icon={<PlusOutlined />}
+                            onClick={addCustomSkill}
+                            style={{ height: 40, background: "#3940c1", color: "#fff", border: "none" }}
+                          >
+                            Ekle
+                          </Button>
+                        </Space.Compact>
+
+                        <Divider style={{ margin: "28px 0" }} />
+
+                        {/* ── BÖLÜM 4: Soft Skills ───────────────────── */}
+                        <SectionHeader
+                          icon={<TeamOutlined />}
+                          title="Kişisel Yetkinlikler"
+                          subtitle="Adaylarda aranacak davranışsal özellikler (isteğe bağlı)"
+                          count={selectedSoftSkills.length}
+                          points={15}
+                        />
+                        <SelectableTagGroup
+                          options={SOFT_SKILL_OPTIONS}
+                          selectedValues={selectedSoftSkills}
+                          onChange={setSelectedSoftSkills}
+                        />
+
+                        <Divider style={{ margin: "28px 0" }} />
+
+                        {/* ── BÖLÜM 5: Eğitim ────────────────────────── */}
+                        <SectionHeader
+                          icon={<BookOutlined />}
+                          title="Tercih Edilen Eğitim Alanları"
+                          subtitle="Hangi bölümler öncelikli değerlendirilsin? (isteğe bağlı)"
+                          count={selectedEducation.length}
+                          points={10}
+                        />
+                        <SelectableTagGroup
+                          options={EDUCATION_OPTIONS}
+                          selectedValues={selectedEducation}
+                          onChange={setSelectedEducation}
+                        />
+
+                        <Divider style={{ margin: "28px 0" }} />
+
+                        {/* ── BÖLÜM 6: Değerlendirme Ayarları ─────────── */}
+                        <SectionHeader
+                          icon={<SettingOutlined />}
+                          title="Değerlendirme Kriterleri"
+                          subtitle="Puanlama yöntemini özelleştirin"
+                        />
+
+                        {/* Deneyim */}
+                        <Card
+                          style={{ borderRadius: 16, border: "1.5px solid #E5E7EB", marginBottom: 12 }}
+                          styles={{ body: { padding: "14px 18px" } }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <Text strong>Minimum Deneyim (Yıl)</Text>
+                              <br />
+                              <Text style={{ color: "#6B7280", fontSize: 12 }}>
+                                Bu yıldan az deneyimi olan adaylar daha düşük puan alır
+                              </Text>
+                            </div>
+                            <InputNumber
+                              min={0} max={30} value={minExperienceYears}
+                              onChange={(v) => setMinExperienceYears(v || 0)}
+                              style={{ width: 90 }}
+                              addonAfter="yıl"
+                            />
+                          </div>
+                        </Card>
+
+                        {/* Proje/Sertifika */}
+                        <Card
+                          style={{
+                            borderRadius: 16, marginBottom: 12,
+                            border: requireProjectOrCertificate ? "1.5px solid #3940c1" : "1.5px solid #E5E7EB",
+                            background: requireProjectOrCertificate ? "rgba(57,64,193,0.04)" : "#fff",
+                          }}
+                          styles={{ body: { padding: "14px 18px" } }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <Text strong>Proje ve Sertifikalar Etkili Olsun</Text>
+                              <br />
+                              <Text style={{ color: "#6B7280", fontSize: 12 }}>
+                                CV'de proje/sertifika bulunması ek puan kazandırır  
+                              </Text>
+                            </div>
+                            <Switch
+                              checked={requireProjectOrCertificate}
+                              onChange={setRequireProjectOrCertificate}
+                              style={requireProjectOrCertificate ? { background: "#3940c1" } : {}}
+                            />
+                          </div>
+                        </Card>
+
+                        {/* Semantik */}
+                        <Card
+                          style={{
+                            borderRadius: 16, marginBottom: 12,
+                            border: useSemanticSimilarity ? "1.5px solid #3940c1" : "1.5px solid #E5E7EB",
+                            background: useSemanticSimilarity ? "rgba(57,64,193,0.04)" : "#fff",
+                          }}
+                          styles={{ body: { padding: "14px 18px" } }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <Text strong>Anlamsal Uyum Skoru</Text>
+                              <br />
+                              <Text style={{ color: "#6B7280", fontSize: 12 }}>
+                                CV metninin seçilen beceriler ve iş tanımıyla anlamsal yakınlığı 
+                              </Text>
+                            </div>
+                            <Switch
+                              checked={useSemanticSimilarity}
+                              onChange={setUseSemanticSimilarity}
+                              style={useSemanticSimilarity ? { background: "#3940c1" } : {}}
+                            />
+                          </div>
+                        </Card>
+
+
+                        <Divider style={{ margin: "28px 0" }} />
+
+                        {/* ── Analiz başlat butonu ─────────────────────── */}
+                        <Button
+                          type="primary"
+                          size="large"
+                          loading={isRunning}
+                          onClick={handleRunAnalysis}
+                          icon={<RocketOutlined />}
+                          block
+                          disabled={selectedSkills.length === 0}
+                          style={{
+                            height: 54, borderRadius: 999, fontSize: 16, fontWeight: 700,
+                            background: selectedSkills.length > 0 ? "#FF6B6B" : undefined,
+                            border: "none",
+                            boxShadow: selectedSkills.length > 0 ? "0 10px 24px rgba(255,107,107,0.28)" : "none",
+                          }}
+                        >
+                          {isRunning ? "Analiz Çalışıyor..." : "Analizi Başlat"}
+                        </Button>
+                        {selectedSkills.length === 0 && (
+                          <Text style={{ display: "block", textAlign: "center", marginTop: 8, color: "#F59E0B", fontSize: 13 }}>
+                            ⚠ Analiz başlatmak için en az 1 teknik beceri seçin
+                          </Text>
+                        )}
+                      </Card>
+                    )}
+                  </Col>
+
+                  {/* ── Sağ: Sidebar ──────────────────────────────────── */}
+                  <Col xs={24} lg={8}>
+                    <div style={{ position: "sticky", top: 100, display: "grid", gap: 20 }}>
+
+                      {/* CV dosyaları */}
+                      <Card
+                        style={{ borderRadius: 20, border: "1px solid #E9EDF5", boxShadow: "0 8px 20px rgba(0,0,0,0.05)" }}
+                        styles={{ body: { padding: 20 } }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                          <Text strong style={{ fontSize: 15 }}>Yüklenen CV'ler</Text>
+                          <Badge count={analysisFiles.length} color="#3940c1" />
+                        </div>
+                        {isFilesLoading ? (
+                          <div style={{ textAlign: "center", padding: 20 }}><Spin /></div>
+                        ) : analysisFiles.length === 0 ? (
+                          <Empty description="Dosya yok" imageStyle={{ height: 40 }} />
+                        ) : (
+                          <div style={{ display: "grid", gap: 8, maxHeight: 260, overflowY: "auto" }}>
+                            {analysisFiles.map((f) => (
+                              <div key={f.id} style={{
+                                display: "flex", alignItems: "center", gap: 10,
+                                padding: "10px 12px", borderRadius: 12,
+                                background: "#F8FAFF", border: "1px solid #E8EDFF",
+                              }}>
+                                <FilePdfOutlined style={{ color: "#3940c1", fontSize: 16, flexShrink: 0 }} />
+                                <Text style={{ fontSize: 12, color: "#374151" }}
+                                  ellipsis={{ tooltip: f.originalFileName }}>
+                                  {f.originalFileName}
+                                </Text>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </Card>
+
+                      {/* Anlık Kriter Özeti */}
+                      {!isAnalysisCompleted && (
+                        <Card
+                          style={{ borderRadius: 20, border: "1px solid #E9EDF5", boxShadow: "0 8px 20px rgba(0,0,0,0.05)" }}
+                          styles={{ body: { padding: 20 } }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                            <Text strong style={{ fontSize: 15 }}>Kriter Özeti</Text>
+                            <div style={{
+                              fontSize: 12, fontWeight: 700, color: progressColor,
+                              background: `${progressColor}18`, borderRadius: 999, padding: "2px 10px",
+                            }}>
+                              {completionPercent}% dolu
+                            </div>
+                          </div>
+
+                          <div style={{ display: "grid", gap: 10 }}>
+                            <SummaryRow label="Kategori"
+                              value={selectedCategories.length > 0
+                                ? CATEGORY_LIST.filter((c) => selectedCategories.includes(c.key)).map((c) => c.label).join(", ")
+                                : "Tümü"}
+                              filled />
+                            <SummaryRow
+                              label="Teknik Beceriler"
+                              value={selectedSkills.length > 0 ? `${selectedSkills.length} beceri seçili` : null}
+                              detail={selectedSkills.slice(0, 3).join(", ") + (selectedSkills.length > 3 ? "..." : "")}
+                              required
+                            />
+                            <SummaryRow
+                              label="Soft Skills"
+                              value={selectedSoftSkills.length > 0 ? `${selectedSoftSkills.length} seçili` : null}
+                            />
+                            <SummaryRow
+                              label="Eğitim"
+                              value={selectedEducation.length > 0 ? selectedEducation[0] : null}
+                            />
+                            <SummaryRow
+                              label="Min. Deneyim"
+                              value={minExperienceYears > 0 ? `${minExperienceYears} yıl` : null}
+                            />
+                            <SummaryRow
+                              label="Proje/Sertifika"
+                              value={requireProjectOrCertificate ? "Aktif (+10 puan)" : null}
+                            />
+                            <SummaryRow
+                              label="Anlamsal Uyum"
+                              value={useSemanticSimilarity ? "Aktif (+25 puan)" : "Devre dışı"}
+                              filled={useSemanticSimilarity}
+                            />
+                          </div>
+
+                          {/* Puan dağılımı */}
+                          <Divider style={{ margin: "14px 0 10px" }} />
+                          <Text style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 600, letterSpacing: 0.5 }}>
+                            PUAN DAĞILIMI (TOPLAM 100)
+                          </Text>
+                          <div style={{ marginTop: 8, display: "grid", gap: 5 }}>
+                            {scoringItems.map(({ label, pts, active }) => (
+                              <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <Text style={{ fontSize: 12, color: active ? "#6B7280" : "#D1D5DB", textDecoration: active ? "none" : "line-through" }}>
+                                  {label}
+                                </Text>
+                                <Text style={{ fontSize: 12, fontWeight: 600, color: active ? "#374151" : "#D1D5DB" }}>
+                                  {active ? `${pts} puan` : "devre dışı"}
+                                </Text>
+                              </div>
+                            ))}
+                            <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid #E5E7EB", paddingTop: 5, marginTop: 2 }}>
+                              <Text style={{ fontSize: 12, fontWeight: 700, color: "#111827" }}>Toplam</Text>
+                              <Text style={{ fontSize: 12, fontWeight: 700, color: "#3940c1" }}>100 puan</Text>
+                            </div>
+                          </div>
+                        </Card>
+                      )}
+
+                    </div>
+                  </Col>
+                </Row>
+
+                {/* ── Çalıştırma Geçmişi ──────────────────────────────── */}
+                {analysisRuns.length > 0 && (
+                  <Card
+                    style={{ borderRadius: 20, marginTop: 24, border: "1px solid #E9EDF5", boxShadow: "0 4px 16px rgba(0,0,0,0.05)" }}
+                    styles={{ body: { padding: "20px 24px" } }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                      <div style={{
+                        width: 34, height: 34, borderRadius: 10,
+                        background: "rgba(57,64,193,0.10)", color: "#3940c1",
+                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
+                      }}>
+                        <HistoryOutlined />
+                      </div>
+                      <Text strong style={{ fontSize: 15, color: "#111827" }}>Çalıştırma Geçmişi</Text>
+                      <Tag style={{ borderRadius: 999, background: "#EEF2FF", color: "#3940c1", border: "none", fontSize: 12 }}>
+                        {analysisRuns.length} çalıştırma
+                      </Tag>
+                    </div>
+
+                    <div style={{ display: "grid", gap: 10 }}>
+                      {analysisRuns.map((run, idx) => (
+                        <div key={run.id} style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          padding: "12px 16px", borderRadius: 14,
+                          background: idx === 0 ? "#F5F7FF" : "#FAFBFF",
+                          border: `1px solid ${idx === 0 ? "#C7D2FE" : "#E9EDF5"}`,
+                          flexWrap: "wrap", gap: 10,
+                        }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                              <Text strong style={{ fontSize: 13, color: "#111827" }}>
+                                {run.runName || "İsimsiz Çalıştırma"}
+                              </Text>
+                              {idx === 0 && (
+                                <Tag style={{ borderRadius: 999, background: "#3940c1", color: "#fff", border: "none", fontSize: 11 }}>
+                                  Son
+                                </Tag>
+                              )}
+                            </div>
+                            <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
+                              <Text style={{ fontSize: 11, color: "#9CA3AF" }}>
+                                <CalendarOutlined style={{ marginRight: 4 }} />
+                                {new Date(run.createdAt).toLocaleString("tr-TR")}
+                              </Text>
+                              {run.hardSkills && (
+                                <Text style={{ fontSize: 11, color: "#6B7280" }} ellipsis>
+                                  {run.hardSkills.split(",").slice(0, 3).join(", ")}
+                                  {run.hardSkills.split(",").length > 3 ? ` +${run.hardSkills.split(",").length - 3}` : ""}
+                                </Text>
+                              )}
+                            </div>
+                          </div>
+                          <Button
+                            size="small"
+                            icon={<BarChartOutlined />}
+                            onClick={() => navigate(`/analizler/${run.id}/results`)}
+                            style={{
+                              borderRadius: 10, height: 32, fontSize: 12,
+                              background: idx === 0 ? "#3940c1" : undefined,
+                              color: idx === 0 ? "#fff" : undefined,
+                              borderColor: idx === 0 ? "#3940c1" : undefined,
+                            }}
+                          >
+                            Sonuçları Gör
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+              </>
             )}
           </Col>
         </Row>
+      </div>
+    </div>
+  );
+}
+
+// Özet satırı yardımcı bileşeni
+function SummaryRow({ label, value, detail, required, filled }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+      <Text style={{ fontSize: 12, color: "#6B7280", flexShrink: 0 }}>
+        {required && !value && <span style={{ color: "#EF4444" }}>* </span>}
+        {label}
+      </Text>
+      <div style={{ textAlign: "right" }}>
+        {value ? (
+          <Text style={{ fontSize: 12, fontWeight: 600, color: filled ? "#3940c1" : "#111827" }}>
+            {value}
+          </Text>
+        ) : (
+          <Text style={{ fontSize: 12, color: "#D1D5DB" }}>—</Text>
+        )}
+        {detail && value && (
+          <Text style={{ fontSize: 11, color: "#9CA3AF", display: "block" }}>{detail}</Text>
+        )}
       </div>
     </div>
   );

@@ -34,8 +34,30 @@ class AnalysisManager {
   }
   
   getLastRun(analysisId) {
-  return axiosInstance.get(`/api/analyses/${analysisId}/last-run`);
-}
+    return axiosInstance.get(`/api/analyses/${analysisId}/last-run`);
+  }
+
+  getFileContent(fileId) {
+    return axiosInstance.get(`/api/analyses/files/${fileId}/content`, {
+      responseType: "blob",
+    });
+  }
+
+  updateResultNote(resultId, note) {
+    return axiosInstance.put(`/api/analyses/results/${resultId}/note`, { note });
+  }
+
+  deleteAnalysis(analysisId) {
+    return axiosInstance.delete(`/api/analyses/${analysisId}`);
+  }
+
+  updateAnalysis(analysisId, data) {
+    return axiosInstance.patch(`/api/analyses/${analysisId}`, data);
+  }
+
+  getAnalysisRuns(analysisId) {
+    return axiosInstance.get(`/api/analyses/${analysisId}/runs`);
+  }
 }
 
 export default new AnalysisManager();

@@ -61,15 +61,15 @@ export default function Home() {
   const howItWorks = [
     {
       step: 1,
-      title: "Kriterleri Gir",
-      description: "İş tanımı, yetenekler, deneyim yılı ve ağırlıkları seç.",
-      icon: <FileSearchOutlined />,
-    },
-    {
-      step: 2,
       title: "CV’leri Yükle",
       description: "Toplu PDF/DOCX yükle veya örnek CV üret.",
       icon: <CloudUploadOutlined />,
+    },
+    {
+      step: 2,
+      title: "Kriterleri Gir",
+      description: "İş tanımı, yetenekler, deneyim yılı ve ağırlıkları seç.",
+      icon: <FileSearchOutlined />,
     },
     {
       step: 3,

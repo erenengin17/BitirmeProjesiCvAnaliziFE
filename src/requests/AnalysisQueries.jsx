@@ -54,6 +54,32 @@ export const useRunResults = (runId) => {
   });
 };
 
+export const useUpdateResultNote = () => {
+  return useMutation({
+    mutationFn: ({ resultId, note }) => AnalysisManager.updateResultNote(resultId, note),
+  });
+};
+
+export const useDeleteAnalysis = () => {
+  return useMutation({
+    mutationFn: (analysisId) => AnalysisManager.deleteAnalysis(analysisId),
+  });
+};
+
+export const useUpdateAnalysis = () => {
+  return useMutation({
+    mutationFn: ({ analysisId, data }) => AnalysisManager.updateAnalysis(analysisId, data),
+  });
+};
+
+export const useAnalysisRuns = (analysisId) => {
+  return useQuery({
+    queryKey: ["analysisRuns", analysisId],
+    queryFn: () => AnalysisManager.getAnalysisRuns(analysisId),
+    enabled: !!analysisId,
+  });
+};
+
 export const useLastRun = (analysisId) => {
   return useQuery({
     queryKey: ["lastRun", analysisId],
