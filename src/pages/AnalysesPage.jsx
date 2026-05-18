@@ -5,12 +5,12 @@ import {
 } from "antd";
 import {
   FileSearchOutlined, CalendarOutlined, FolderOpenOutlined,
-  RightOutlined, DeleteOutlined, EditOutlined,
+  RightOutlined, DeleteOutlined, EditOutlined, CopyOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import LoginNavbar from "../components/LoginNavbar";
-import { useUserAnalyses, useDeleteAnalysis, useUpdateAnalysis } from "../requests/AnalysisQueries";
+import { useUserAnalyses, useDeleteAnalysis, useUpdateAnalysis, useCloneAnalysis } from "../requests/AnalysisQueries";
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -19,14 +19,17 @@ export default function AnalysesPage() {
   const queryClient = useQueryClient();
   const user        = JSON.parse(localStorage.getItem("user"));
 
-  const { data, isLoading } = useUserAnalyses(user?.id);
+  const { data, isLoading } = useUserAnalyses();
   const analyses = data?.data || [];
 
   const { mutateAsync: deleteAnalysis, isPending: isDeleting } = useDeleteAnalysis();
   const { mutateAsync: updateAnalysis, isPending: isUpdating } = useUpdateAnalysis();
+  const { mutateAsync: cloneAnalysis, isPending: isCloning } = useCloneAnalysis();
 
   const [editModal, setEditModal] = useState({ open: false, item: null });
+  const [cloneModal, setCloneModal] = useState({ open: false, item: null });
   const [form] = Form.useForm();
+  const [cloneForm] = Form.useForm();
 
   const openEdit = (item, e) => {
     e.stopPropagation();
@@ -41,16 +44,32 @@ export default function AnalysesPage() {
   const handleUpdate = async () => {
     const values = await form.validateFields();
     await updateAnalysis({ analysisId: editModal.item.id, data: values });
-    queryClient.invalidateQueries({ queryKey: ["userAnalyses", user?.id] });
-    queryClient.invalidateQueries({ queryKey: ["recentAnalyses", user?.id] });
+    queryClient.invalidateQueries({ queryKey: ["userAnalyses"] });
+    queryClient.invalidateQueries({ queryKey: ["recentAnalyses"] });
     setEditModal({ open: false, item: null });
+  };
+
+  const handleClone = (item, e) => {
+    e.stopPropagation();
+    cloneForm.setFieldsValue({ newName: item.analysisName + " (Kopya)" });
+    setCloneModal({ open: true, item });
+  };
+
+  const handleCloneConfirm = async () => {
+    const values = await cloneForm.validateFields();
+    const response = await cloneAnalysis({ analysisId: cloneModal.item.id, newName: values.newName });
+    const newId = response?.data?.id;
+    setCloneModal({ open: false, item: null });
+    cloneForm.resetFields();
+    queryClient.invalidateQueries({ queryKey: ["userAnalyses"] });
+    if (newId) navigate(`/analizler/${newId}`);
   };
 
   const handleDelete = async (analysisId, e) => {
     e.stopPropagation();
     await deleteAnalysis(analysisId);
-    queryClient.invalidateQueries({ queryKey: ["userAnalyses", user?.id] });
-    queryClient.invalidateQueries({ queryKey: ["recentAnalyses", user?.id] });
+    queryClient.invalidateQueries({ queryKey: ["userAnalyses"] });
+    queryClient.invalidateQueries({ queryKey: ["recentAnalyses"] });
   };
 
   const getStatusColor = (status) => {
@@ -130,6 +149,13 @@ export default function AnalysesPage() {
 
                           <Space size={4}>
                             <Button
+                              type="text" size="small" icon={<CopyOutlined />}
+                              loading={isCloning}
+                              onClick={(e) => handleClone(item, e)}
+                              style={{ color: "#3940c1", borderRadius: 8 }}
+                              title="Klonla"
+                            />
+                            <Button
                               type="text" size="small" icon={<EditOutlined />}
                               onClick={(e) => openEdit(item, e)}
                               style={{ color: "#6B7280", borderRadius: 8 }}
@@ -166,6 +192,33 @@ export default function AnalysesPage() {
           </Col>
         </Row>
       </div>
+
+      {/* Klon İsim Modalı */}
+      <Modal
+        title="Analizi Klonla"
+        open={cloneModal.open}
+        onOk={handleCloneConfirm}
+        onCancel={() => { setCloneModal({ open: false, item: null }); cloneForm.resetFields(); }}
+        okText="Klonla"
+        cancelText="İptal"
+        confirmLoading={isCloning}
+        okButtonProps={{ style: { background: "#3940C1", borderColor: "#3940C1" } }}
+      >
+        <Form form={cloneForm} layout="vertical" style={{ marginTop: 8 }}>
+          <Form.Item
+            name="newName"
+            label="Yeni Analiz Adı"
+            rules={[{ required: true, message: "Analiz adı boş olamaz" }]}
+          >
+            <Input
+              autoFocus
+              onPressEnter={handleCloneConfirm}
+              placeholder="Analiz adı"
+              style={{ borderRadius: 10 }}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* Düzenleme Modalı */}
       <Modal

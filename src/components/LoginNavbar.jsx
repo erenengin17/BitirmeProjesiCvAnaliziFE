@@ -103,7 +103,7 @@ const LoginNavbar = () => {
             Anasayfa
           </Button>
 
-          <Button
+<Button
             type="text"
             onClick={() => navigate("/analizler")}
             icon={<FileSearchOutlined style={{ color: PRIMARY }} />}

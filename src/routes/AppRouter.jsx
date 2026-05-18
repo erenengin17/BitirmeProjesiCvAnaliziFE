@@ -7,18 +7,20 @@ import AnalysesPage from "../pages/AnalysesPage";
 import AnalysisDetailPage from "../pages/AnalysisDetailPage";
 import AnalysisResultsPage from "../pages/AnalysisResultsPage";
 import SettingsPage from "../pages/SettingsPage";
+import ForgotPasswordPage from "../pages/ForgotPasswordPage";
 
 export default function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
-      <Route path="/Login" element={<Login />} />
-      <Route path="/Signup" element={<Signup />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
       <Route path="/dashboard" element={<MainPage />} />
       <Route path="/analizler" element={<AnalysesPage />} />
       <Route path="/analizler/:id" element={<AnalysisDetailPage />} />
       <Route path="/analizler/:runId/results" element={<AnalysisResultsPage />} />
       <Route path="/ayarlar" element={<SettingsPage />} />
+      <Route path="/sifremi-unuttum" element={<ForgotPasswordPage />} />
     </Routes>
   );
 }

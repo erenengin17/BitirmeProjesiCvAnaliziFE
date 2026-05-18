@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import {
   Row, Col, Typography, Card, Space, Tag, Spin, Empty,
   Divider, Button, Input, InputNumber, Switch, Badge,
-  notification, Progress,
+  notification, Progress, Modal, Steps, Form,
 } from "antd";
 import {
   CalendarOutlined, FolderOpenOutlined, UserOutlined,
@@ -12,13 +12,13 @@ import {
   CodeOutlined, DatabaseOutlined, MobileOutlined,
   ExperimentOutlined, DeploymentUnitOutlined, SafetyOutlined,
   TeamOutlined, BookOutlined, SettingOutlined,
-  HistoryOutlined, BarChartOutlined,
+  LoadingOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 import SelectableTagGroup from "../components/SelectableTagGroup";
 import LoginNavbar from "../components/LoginNavbar";
 import {
-  useLastRun, useAnalysisById, useAnalysisFiles, useRunAnalysis, useAnalysisRuns,
+  useLastRun, useAnalysisById, useAnalysisFiles, useRunAnalysis, useCloneAnalysis,
 } from "../requests/AnalysisQueries";
 
 const { Title, Text, Paragraph } = Typography;
@@ -130,20 +130,79 @@ export default function AnalysisDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  const { data, isLoading, refetch } = useAnalysisById(id);
+  const { data, isLoading, isError, refetch } = useAnalysisById(id);
   const { data: filesData, isLoading: isFilesLoading } = useAnalysisFiles(id);
   const { mutateAsync: runAnalysisMutate, isPending: isRunning } = useRunAnalysis();
   const { data: lastRun, isLoading: isLastRunLoading, refetch: refetchLastRun } = useLastRun(id);
-  const { data: runsData } = useAnalysisRuns(id);
-  const analysisRuns = runsData?.data || [];
+  const { mutateAsync: cloneAnalysisMutate, isPending: isCloning } = useCloneAnalysis();
 
   const analysis = data?.data;
+
+  if (isError) {
+    navigate("/analizler", { replace: true });
+    return null;
+  }
   const analysisFiles = filesData?.data || [];
 
   const [api, contextHolder] = notification.useNotification();
   const [latestRunId, setLatestRunId] = useState(null);
 
+  // Progress modal state
+  const [progressStep, setProgressStep]   = useState(0);
+  const [progressPct,  setProgressPct]    = useState(0);
+  const progressTimer = useRef(null);
+
+  const ANALYSIS_STEPS = [
+    { title: "PDF'ler Okunuyor",          desc: "CV dosyaları işleniyor ve metin çıkarılıyor…" },
+    { title: "Profiller Çıkarılıyor",     desc: "GPT-4o-mini her CV'yi analiz ediyor, beceriler ve deneyim tespit ediliyor…" },
+    { title: "Anlamsal Uyum Hesaplanıyor",desc: "CV'ler pozisyonla semantik olarak karşılaştırılıyor…" },
+    { title: "Puanlanıyor ve Sıralanıyor",desc: "Tüm kriterler birleştiriliyor, sıralama oluşturuluyor…" },
+  ];
+
+  useEffect(() => {
+    if (!isRunning) {
+      clearInterval(progressTimer.current);
+      return;
+    }
+
+    const cvCount = analysis?.cvCount || 10;
+    const totalMs = Math.max(20_000, cvCount * 550);
+    const tickMs  = 400;
+    // step ilerleme eşikleri (%)
+    const stepAt  = [0, 10, 60, 83];
+
+    setProgressStep(0);
+    setProgressPct(0);
+
+    let elapsed = 0;
+    progressTimer.current = setInterval(() => {
+      elapsed += tickMs;
+
+      let pct;
+      if (elapsed <= totalMs) {
+        // Ease-out: başta hızlı, sona doğru yavaşlar → 0%..90%
+        const ratio = elapsed / totalMs;
+        pct = 90 * (1 - Math.pow(1 - ratio, 2.5));
+      } else {
+        // Tahmini süre aşıldı: 90%'dan 96%'ya asimptotik (hiç takılmaz)
+        const overtime = elapsed - totalMs;
+        pct = 90 + 6 * (1 - Math.exp(-overtime / totalMs));
+      }
+
+      pct = Math.min(Math.round(pct), 96);
+      setProgressPct(pct);
+
+      const step = stepAt.findLastIndex((t) => pct >= t);
+      setProgressStep(step);
+    }, tickMs);
+
+    return () => clearInterval(progressTimer.current);
+  }, [isRunning]);
+
   // Form state
+  const [cloneModalOpen, setCloneModalOpen] = useState(false);
+  const [cloneForm] = Form.useForm();
+
   const [runName, setRunName] = useState("");
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedSkills, setSelectedSkills] = useState([]);
@@ -262,6 +321,25 @@ export default function AnalysisDetailPage() {
     }
   };
 
+  const handleClone = () => {
+    cloneForm.setFieldsValue({ newName: (analysis?.analysisName || "") + " (Kopya)" });
+    setCloneModalOpen(true);
+  };
+
+  const handleCloneConfirm = async () => {
+    try {
+      const values = await cloneForm.validateFields();
+      const response = await cloneAnalysisMutate({ analysisId: id, newName: values.newName });
+      const newId = response?.data?.id;
+      setCloneModalOpen(false);
+      cloneForm.resetFields();
+      api.success({ message: "Analiz klonlandı!", description: "Yeni analize yönlendiriliyorsunuz.", placement: "topRight" });
+      if (newId) navigate(`/analizler/${newId}`);
+    } catch {
+      api.error({ message: "Klon oluşturulamadı.", placement: "topRight" });
+    }
+  };
+
   const handleShowResults = async () => {
     try {
       let runId = resolvedLastRunId;
@@ -287,6 +365,85 @@ export default function AnalysisDetailPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#F7F8FC" }}>
       {contextHolder}
+
+      {/* ── Analiz Progress Modal ───────────────────────────────────────── */}
+      <Modal
+        open={isRunning}
+        footer={null}
+        closable={false}
+        maskClosable={false}
+        centered
+        width={480}
+        styles={{ body: { padding: "36px 32px" } }}
+      >
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: "50%",
+            background: "linear-gradient(135deg, #3940c1, #FF6B6B)",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 16,
+          }}>
+            <LoadingOutlined style={{ fontSize: 28, color: "#fff" }} spin />
+          </div>
+          <Title level={4} style={{ margin: 0, color: "#111827" }}>Analiz Çalışıyor</Title>
+          <Text style={{ color: "#6B7280", fontSize: 14 }}>
+            {analysis?.cvCount} CV işleniyor, lütfen bekleyin…
+          </Text>
+        </div>
+
+        <Progress
+          percent={progressPct}
+          strokeColor={{ "0%": "#3940c1", "100%": "#FF6B6B" }}
+          strokeWidth={8}
+          style={{ marginBottom: 28 }}
+        />
+
+        <Steps
+          size="small"
+          direction="vertical"
+          current={progressStep}
+          style={{ textAlign: "left" }}
+          items={ANALYSIS_STEPS.map((s, i) => ({
+            title: <Text strong style={{ fontSize: 13 }}>{s.title}</Text>,
+            description: progressStep === i
+              ? <Text style={{ fontSize: 12, color: "#6B7280" }}>{s.desc}</Text>
+              : null,
+            icon: progressStep > i
+              ? <CheckCircleOutlined style={{ color: "#10B981" }} />
+              : progressStep === i
+                ? <LoadingOutlined style={{ color: "#3940c1" }} spin />
+                : undefined,
+          }))}
+        />
+      </Modal>
+
+      {/* ── Klon İsim Modalı ───────────────────────────────────────────── */}
+      <Modal
+        title="Analizi Klonla"
+        open={cloneModalOpen}
+        onOk={handleCloneConfirm}
+        onCancel={() => { setCloneModalOpen(false); cloneForm.resetFields(); }}
+        okText="Klonla"
+        cancelText="İptal"
+        confirmLoading={isCloning}
+        okButtonProps={{ style: { background: "#3940c1", borderColor: "#3940c1" } }}
+      >
+        <Form form={cloneForm} layout="vertical" style={{ marginTop: 8 }}>
+          <Form.Item
+            name="newName"
+            label="Yeni Analiz Adı"
+            rules={[{ required: true, message: "Analiz adı boş olamaz" }]}
+          >
+            <Input
+              autoFocus
+              onPressEnter={handleCloneConfirm}
+              placeholder="Analiz adı"
+              style={{ borderRadius: 10 }}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
       <LoginNavbar />
 
       <div style={{ paddingTop: 100, paddingBottom: 60 }}>
@@ -366,6 +523,7 @@ export default function AnalysisDetailPage() {
                           >
                             Sonuçları Görüntüle
                           </Button>
+
                         </Space>
                       </Card>
                     ) : (
@@ -800,77 +958,6 @@ export default function AnalysisDetailPage() {
                   </Col>
                 </Row>
 
-                {/* ── Çalıştırma Geçmişi ──────────────────────────────── */}
-                {analysisRuns.length > 0 && (
-                  <Card
-                    style={{ borderRadius: 20, marginTop: 24, border: "1px solid #E9EDF5", boxShadow: "0 4px 16px rgba(0,0,0,0.05)" }}
-                    styles={{ body: { padding: "20px 24px" } }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                      <div style={{
-                        width: 34, height: 34, borderRadius: 10,
-                        background: "rgba(57,64,193,0.10)", color: "#3940c1",
-                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
-                      }}>
-                        <HistoryOutlined />
-                      </div>
-                      <Text strong style={{ fontSize: 15, color: "#111827" }}>Çalıştırma Geçmişi</Text>
-                      <Tag style={{ borderRadius: 999, background: "#EEF2FF", color: "#3940c1", border: "none", fontSize: 12 }}>
-                        {analysisRuns.length} çalıştırma
-                      </Tag>
-                    </div>
-
-                    <div style={{ display: "grid", gap: 10 }}>
-                      {analysisRuns.map((run, idx) => (
-                        <div key={run.id} style={{
-                          display: "flex", alignItems: "center", justifyContent: "space-between",
-                          padding: "12px 16px", borderRadius: 14,
-                          background: idx === 0 ? "#F5F7FF" : "#FAFBFF",
-                          border: `1px solid ${idx === 0 ? "#C7D2FE" : "#E9EDF5"}`,
-                          flexWrap: "wrap", gap: 10,
-                        }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                              <Text strong style={{ fontSize: 13, color: "#111827" }}>
-                                {run.runName || "İsimsiz Çalıştırma"}
-                              </Text>
-                              {idx === 0 && (
-                                <Tag style={{ borderRadius: 999, background: "#3940c1", color: "#fff", border: "none", fontSize: 11 }}>
-                                  Son
-                                </Tag>
-                              )}
-                            </div>
-                            <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
-                              <Text style={{ fontSize: 11, color: "#9CA3AF" }}>
-                                <CalendarOutlined style={{ marginRight: 4 }} />
-                                {new Date(run.createdAt).toLocaleString("tr-TR")}
-                              </Text>
-                              {run.hardSkills && (
-                                <Text style={{ fontSize: 11, color: "#6B7280" }} ellipsis>
-                                  {run.hardSkills.split(",").slice(0, 3).join(", ")}
-                                  {run.hardSkills.split(",").length > 3 ? ` +${run.hardSkills.split(",").length - 3}` : ""}
-                                </Text>
-                              )}
-                            </div>
-                          </div>
-                          <Button
-                            size="small"
-                            icon={<BarChartOutlined />}
-                            onClick={() => navigate(`/analizler/${run.id}/results`)}
-                            style={{
-                              borderRadius: 10, height: 32, fontSize: 12,
-                              background: idx === 0 ? "#3940c1" : undefined,
-                              color: idx === 0 ? "#fff" : undefined,
-                              borderColor: idx === 0 ? "#3940c1" : undefined,
-                            }}
-                          >
-                            Sonuçları Gör
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                )}
               </>
             )}
           </Col>

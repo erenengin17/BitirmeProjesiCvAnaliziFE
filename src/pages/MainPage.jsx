@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Row,
   Col,
@@ -43,6 +43,7 @@ export default function MainPage() {
   const [positionName, setPositionName] = useState("");
   const [description, setDescription] = useState("");
   const [fileList, setFileList] = useState([]);
+  const fileCountRef = useRef(0);
 
   const [api, contextHolder] = notification.useNotification();
 
@@ -64,7 +65,7 @@ export default function MainPage() {
     data,
     isLoading,
     refetch,
-  } = useRecentAnalyses(user?.id);
+  } = useRecentAnalyses();
 
   const recentAnalyses = (data?.data || []).slice(0, 3);
 
@@ -76,6 +77,7 @@ export default function MainPage() {
   };
 
   const handleRemoveFile = (targetFile) => {
+    fileCountRef.current = Math.max(0, fileCountRef.current - 1);
     setFileList((prev) => prev.filter((file) => file.uid !== targetFile.uid));
   };
 
@@ -94,6 +96,11 @@ export default function MainPage() {
         return Upload.LIST_IGNORE;
       }
 
+      if (fileCountRef.current >= 100) {
+        showNotification("warning", "Limit Aşıldı", "Maksimum 100 CV yükleyebilirsiniz.");
+        return Upload.LIST_IGNORE;
+      }
+
       const alreadyExists = fileList.some(
         (existingFile) =>
           existingFile.name === file.name && existingFile.size === file.size
@@ -108,6 +115,7 @@ export default function MainPage() {
         return Upload.LIST_IGNORE;
       }
 
+      fileCountRef.current += 1;
       setFileList((prev) => [...prev, file]);
       return false;
     },
@@ -130,16 +138,10 @@ const handleCreateAnalysis = async () => {
       return;
     }
 
-    if (!user?.id) {
-      showNotification("error", "Kullanıcı Hatası", "Kullanıcı bilgisi bulunamadı.");
-      return;
-    }
-
     const formData = new FormData();
     formData.append("analysisName", analysisName.trim());
     formData.append("positionName", positionName.trim());
     formData.append("description", description?.trim() || "");
-    formData.append("userId", String(user.id));
 
     fileList.forEach((file) => {
       formData.append("files", file.originFileObj || file);

@@ -16,6 +16,18 @@ class UserManager {
   resendCode(data) {
     return axiosInstance.post("/api/auth/resend-code", data);
   }
+
+  forgotPassword(data) {
+    return axiosInstance.post("/api/auth/forgot-password", data);
+  }
+
+  resetPassword(data) {
+    return axiosInstance.post("/api/auth/reset-password", data);
+  }
+
+  changePassword(data) {
+    return axiosInstance.post("/api/auth/change-password", data);
+  }
 }
 
 export default new UserManager();

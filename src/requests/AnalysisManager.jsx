@@ -9,12 +9,12 @@ class AnalysisManager {
     });
   }
 
-  getRecentAnalyses(userId) {
-    return axiosInstance.get(`/api/analyses/recent/${userId}`);
+  getRecentAnalyses() {
+    return axiosInstance.get("/api/analyses/my/recent");
   }
 
-  getUserAnalyses(userId) {
-    return axiosInstance.get(`/api/analyses/user/${userId}`);
+  getUserAnalyses() {
+    return axiosInstance.get("/api/analyses/my");
   }
 
   getAnalysisById(analysisId) {
@@ -47,7 +47,11 @@ class AnalysisManager {
     return axiosInstance.put(`/api/analyses/results/${resultId}/note`, { note });
   }
 
-  deleteAnalysis(analysisId) {
+  explainResult(resultId) {
+    return axiosInstance.post(`/api/analyses/results/${resultId}/explain`);
+  }
+
+deleteAnalysis(analysisId) {
     return axiosInstance.delete(`/api/analyses/${analysisId}`);
   }
 
@@ -57,6 +61,14 @@ class AnalysisManager {
 
   getAnalysisRuns(analysisId) {
     return axiosInstance.get(`/api/analyses/${analysisId}/runs`);
+  }
+
+  getRunById(runId) {
+    return axiosInstance.get(`/api/analyses/runs/${runId}`);
+  }
+
+  cloneAnalysis(analysisId, newName) {
+    return axiosInstance.post(`/api/analyses/${analysisId}/clone`, { newName });
   }
 }
 

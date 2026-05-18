@@ -7,19 +7,17 @@ export const useCreateAnalysis = () => {
   });
 };
 
-export const useRecentAnalyses = (userId) => {
+export const useRecentAnalyses = () => {
   return useQuery({
-    queryKey: ["recentAnalyses", userId],
-    queryFn: () => AnalysisManager.getRecentAnalyses(userId),
-    enabled: !!userId,
+    queryKey: ["recentAnalyses"],
+    queryFn: () => AnalysisManager.getRecentAnalyses(),
   });
 };
 
-export const useUserAnalyses = (userId) => {
+export const useUserAnalyses = () => {
   return useQuery({
-    queryKey: ["userAnalyses", userId],
-    queryFn: () => AnalysisManager.getUserAnalyses(userId),
-    enabled: !!userId,
+    queryKey: ["userAnalyses"],
+    queryFn: () => AnalysisManager.getUserAnalyses(),
   });
 };
 
@@ -28,6 +26,7 @@ export const useAnalysisById = (analysisId) => {
     queryKey: ["analysisDetail", analysisId],
     queryFn: () => AnalysisManager.getAnalysisById(analysisId),
     enabled: !!analysisId,
+    retry: false,
   });
 };
 
@@ -60,6 +59,13 @@ export const useUpdateResultNote = () => {
   });
 };
 
+export const useExplainResult = () => {
+  return useMutation({
+    mutationFn: (resultId) => AnalysisManager.explainResult(resultId),
+  });
+};
+
+
 export const useDeleteAnalysis = () => {
   return useMutation({
     mutationFn: (analysisId) => AnalysisManager.deleteAnalysis(analysisId),
@@ -77,6 +83,20 @@ export const useAnalysisRuns = (analysisId) => {
     queryKey: ["analysisRuns", analysisId],
     queryFn: () => AnalysisManager.getAnalysisRuns(analysisId),
     enabled: !!analysisId,
+  });
+};
+
+export const useRunById = (runId) => {
+  return useQuery({
+    queryKey: ["runById", runId],
+    queryFn: () => AnalysisManager.getRunById(runId),
+    enabled: !!runId,
+  });
+};
+
+export const useCloneAnalysis = () => {
+  return useMutation({
+    mutationFn: ({ analysisId, newName }) => AnalysisManager.cloneAnalysis(analysisId, newName),
   });
 };
 

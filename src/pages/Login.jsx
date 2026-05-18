@@ -1,193 +1,137 @@
-import React, { useMemo } from "react";
-import { Row, Col, Card, Typography, Form, Input, Button, Divider, Space, notification } from "antd";
+import { Typography, Form, Input, Button, notification } from "antd";
 import { MailOutlined, LockOutlined, LoginOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import { useLogin } from "../requests/UserQueries";
 
-const { Title, Text, Paragraph } = Typography;
-
-const PRIMARY = "#3940c1";
-const ACCENT = "#FF6B6B";
+const { Title, Text } = Typography;
 
 export default function Login() {
   const navigate = useNavigate();
   const { mutateAsync: loginMutate, isPending } = useLogin();
   const [api, contextHolder] = notification.useNotification();
 
-  const showNotification = (type, message, description) => {
-    api[type]({
-      message,
-      description,
-      placement: "topRight",
-      duration: 3,
-    });
-  };
-
-  const cardStyle = useMemo(
-    () => ({
-      borderRadius: 20,
-      border: "1px solid #e5e7eb",
-      boxShadow: "0 16px 40px rgba(0,0,0,0.08)",
-      overflow: "hidden",
-    }),
-    []
-  );
-
   const onFinish = async (values) => {
     try {
-      await loginMutate({
-        email: values.email,
-        password: values.password,
-      });
-
-      showNotification("success", "Giriş Başarılı", "Başarıyla giriş yaptın.");
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 700);
+      await loginMutate({ email: values.email, password: values.password });
+      api.success({ message: "Giriş Başarılı", placement: "topRight" });
+      setTimeout(() => navigate("/dashboard"), 700);
     } catch (err) {
-      const apiMsg = err?.response?.data?.error || err?.response?.data?.message;
-
-      if (apiMsg?.toLowerCase().includes("doğrula")) {
-        showNotification("warning", "Email Doğrulama Gerekli", apiMsg);
-        setTimeout(() => {
-          navigate("/signup", { state: { email: values.email, step: "verify" } });
-        }, 700);
+      const msg = err?.response?.data?.error || err?.response?.data?.message;
+      if (msg?.toLowerCase().includes("doğrula")) {
+        api.warning({ message: "Email Doğrulama Gerekli", description: msg, placement: "topRight" });
+        setTimeout(() => navigate("/signup", { state: { email: values.email, step: "verify" } }), 700);
         return;
       }
-
-      showNotification(
-        "error",
-        "Giriş Hatası",
-        apiMsg || "Giriş sırasında hata oluştu."
-      );
+      api.error({ message: "Giriş Hatası", description: msg || "Email veya şifre hatalı.", placement: "topRight" });
     }
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#fafafa" }}>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(160deg,#EEF0FF 0%,#F7F8FC 55%,#FFF3F3 100%)" }}>
       {contextHolder}
       <Navbar />
 
-      <div style={{ paddingTop: 110, paddingBottom: 48 }}>
-        <Row justify="center" style={{ padding: "0 16px" }}>
-          <Col xs={24} sm={22} md={16} lg={12} xl={10}>
-            <Card style={cardStyle} styles={{ body: { padding: 0 } }}>
-              <div
-                style={{
-                  position: "relative",
-                  padding: "28px 26px",
-                  background: `linear-gradient(135deg, ${PRIMARY}, rgba(57,64,193,0.88))`,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    position: "absolute",
-                    right: -40,
-                    top: -40,
-                    width: 180,
-                    height: 180,
-                    background: "rgba(255,107,107,0.28)",
-                    filter: "blur(18px)",
-                    borderRadius: 999,
-                  }}
-                />
-                <div
-                  style={{
-                    position: "absolute",
-                    left: -40,
-                    bottom: -40,
-                    width: 160,
-                    height: 160,
-                    background: "rgba(255,255,255,0.12)",
-                    filter: "blur(18px)",
-                    borderRadius: 999,
-                  }}
-                />
+      {/* Dekoratif arka plan blob'ları */}
+      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
+        <div style={{ position: "absolute", top: "10%", right: "8%", width: 300, height: 300, background: "rgba(57,64,193,0.07)", filter: "blur(60px)", borderRadius: "50%" }} />
+        <div style={{ position: "absolute", bottom: "15%", left: "5%", width: 250, height: 250, background: "rgba(255,107,107,0.07)", filter: "blur(50px)", borderRadius: "50%" }} />
+      </div>
 
-                <Space direction="vertical" size={6} style={{ position: "relative" }}>
-                  <Title level={2} style={{ color: "white", margin: 0 }}>
-                    Giriş Yap
-                  </Title>
-                  <Paragraph style={{ color: "rgba(255,255,255,0.9)", marginBottom: 0 }}>
-                    Aday analiz paneline erişmek için giriş yapın.
-                  </Paragraph>
-                </Space>
+      <div style={{
+        position: "relative", zIndex: 1,
+        minHeight: "calc(100vh - 96px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "16px",
+      }}>
+        <div style={{ width: "100%", maxWidth: 400 }}>
+
+          {/* Marka satırı */}
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              padding: "6px 18px", borderRadius: 999,
+              background: "rgba(57,64,193,0.08)", border: "1px solid rgba(57,64,193,0.15)",
+            }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3940c1" }} />
+              <Text style={{ color: "#3940c1", fontWeight: 600, fontSize: 13 }}>AtlasCV · CV Analiz Platformu</Text>
+            </div>
+          </div>
+
+          {/* Kart */}
+          <div style={{
+            background: "#fff", borderRadius: 24,
+            boxShadow: "0 4px 6px rgba(0,0,0,0.04), 0 20px 50px rgba(57,64,193,0.10)",
+            border: "1px solid rgba(57,64,193,0.08)",
+            overflow: "hidden",
+          }}>
+            {/* Üst aksanlı şerit */}
+            <div style={{ height: 4, background: "linear-gradient(90deg,#3940c1,#FF6B6B)" }} />
+
+            <div style={{ padding: "28px 32px 32px" }}>
+              {/* Başlık */}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 14, marginBottom: 14,
+                  background: "linear-gradient(135deg,rgba(57,64,193,0.12),rgba(255,107,107,0.12))",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <LoginOutlined style={{ fontSize: 20, color: "#3940c1" }} />
+                </div>
+                <Title level={3} style={{ margin: "0 0 4px", color: "#111827" }}>Giriş Yap</Title>
+                <Text style={{ color: "#6B7280", fontSize: 14 }}>
+                  Hesabın yok mu?{" "}
+                  <Link to="/signup" style={{ color: "#3940c1", fontWeight: 600 }}>Kayıt Ol</Link>
+                </Text>
               </div>
 
-              <div style={{ padding: 26 }}>
-                <Form layout="vertical" onFinish={onFinish} autoComplete="off">
-                  <Form.Item
-                    label={<Text style={{ color: "#111827", fontWeight: 600 }}>E-posta</Text>}
-                    name="email"
-                    rules={[
-                      { required: true, message: "E-posta zorunlu" },
-                      { type: "email", message: "Geçerli bir e-posta girin" },
-                    ]}
-                  >
-                    <Input
-                      size="large"
-                      prefix={<MailOutlined style={{ color: PRIMARY }} />}
-                      placeholder="ornek@firma.com"
-                      style={{ borderRadius: 12 }}
-                    />
-                  </Form.Item>
+              {/* Form */}
+              <Form layout="vertical" onFinish={onFinish} autoComplete="off">
+                <Form.Item
+                  label={<Text style={{ color: "#374151", fontWeight: 600, fontSize: 13 }}>E-posta</Text>}
+                  name="email"
+                  rules={[{ required: true, message: "E-posta zorunlu" }, { type: "email", message: "Geçerli bir e-posta" }]}
+                  style={{ marginBottom: 14 }}
+                >
+                  <Input size="large" prefix={<MailOutlined style={{ color: "#C4C9E8" }} />}
+                    placeholder="ornek@firma.com"
+                    style={{ borderRadius: 12, height: 46, borderColor: "#E5E7EB" }} />
+                </Form.Item>
 
-                  <Form.Item
-                    label={<Text style={{ color: "#111827", fontWeight: 600 }}>Şifre</Text>}
-                    name="password"
-                    rules={[{ required: true, message: "Şifre zorunlu" }]}
-                  >
-                    <Input.Password
-                      size="large"
-                      prefix={<LockOutlined style={{ color: PRIMARY }} />}
-                      placeholder="••••••••"
-                      style={{ borderRadius: 12 }}
-                    />
-                  </Form.Item>
+                <Form.Item
+                  label={<Text style={{ color: "#374151", fontWeight: 600, fontSize: 13 }}>Şifre</Text>}
+                  name="password"
+                  rules={[{ required: true, message: "Şifre zorunlu" }]}
+                  style={{ marginBottom: 10 }}
+                >
+                  <Input.Password size="large" prefix={<LockOutlined style={{ color: "#C4C9E8" }} />}
+                    placeholder="••••••••"
+                    style={{ borderRadius: 12, height: 46, borderColor: "#E5E7EB" }} />
+                </Form.Item>
 
-                  <Row justify="space-between" align="middle" style={{ marginBottom: 10 }}>
-                    <Text style={{ color: "#6b7280" }}>
-                      Hesabın yok mu?{" "}
-                      <Link to="/signup" style={{ color: PRIMARY, fontWeight: 600 }}>
-                        Kayıt Ol
-                      </Link>
-                    </Text>
-                  </Row>
+                <div style={{ textAlign: "right", marginBottom: 22 }}>
+                  <Link to="/sifremi-unuttum" style={{ color: "#6B7280", fontSize: 13 }}>
+                    Şifremi Unuttum?
+                  </Link>
+                </div>
 
-                  <Button
-                    type="primary"
-                    htmlType="submit"
-                    size="large"
-                    icon={<LoginOutlined />}
-                    loading={isPending}
-                    disabled={isPending}
-                    style={{
-                      width: "100%",
-                      borderRadius: 999,
-                      height: 48,
-                      background: ACCENT,
-                      border: "none",
-                      boxShadow: "0 12px 26px rgba(255,107,107,0.25)",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Giriş Yap
-                  </Button>
+                <Button type="primary" htmlType="submit" size="large" loading={isPending} block
+                  style={{
+                    height: 48, borderRadius: 12, fontWeight: 700, fontSize: 15, border: "none",
+                    background: "linear-gradient(135deg,#3940c1,#5761f5)",
+                    boxShadow: "0 8px 20px rgba(57,64,193,0.30)",
+                  }}
+                >
+                  Giriş Yap
+                </Button>
+              </Form>
+            </div>
+          </div>
 
-                  <Divider style={{ margin: "18px 0" }} />
-
-                  <div style={{ marginTop: 16, textAlign: "center" }}>
-                    <Text style={{ color: "#9ca3af", fontSize: 12 }}>
-                      Devam ederek Kullanım Koşulları’nı kabul etmiş olursunuz.
-                    </Text>
-                  </div>
-                </Form>
-              </div>
-            </Card>
-          </Col>
-        </Row>
+          <Text style={{ display: "block", textAlign: "center", marginTop: 16, color: "#9CA3AF", fontSize: 12 }}>
+            Devam ederek Kullanım Koşulları'nı kabul etmiş olursunuz.
+          </Text>
+        </div>
       </div>
     </div>
   );

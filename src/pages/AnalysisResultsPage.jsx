@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import XLSXStyle from "xlsx-js-style";
 import {
   Row, Col, Typography, Card, Space, Tag, Spin, Empty,
   Button, Input, Select, Progress, Divider, Modal,
@@ -15,10 +16,11 @@ import {
   TeamOutlined, EyeOutlined, DownloadOutlined,
   FileExcelOutlined, SaveOutlined, EditOutlined,
   DeleteOutlined, PlusOutlined, SwapOutlined, CheckOutlined,
+  RobotOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 import LoginNavbar from "../components/LoginNavbar";
-import { useRunResults, useUpdateResultNote } from "../requests/AnalysisQueries";
+import { useRunResults, useUpdateResultNote, useExplainResult, useRunById } from "../requests/AnalysisQueries";
 import AnalysisManager from "../requests/AnalysisManager";
 
 const { Title, Text } = Typography;
@@ -35,6 +37,24 @@ const SCORE_CATEGORIES = [
   { key: "projectCertScore",  label: "Proje / Sertifika",max: 10, color: "#7C3AED" },
   { key: "semanticScore",     label: "Anlamsal Uyum",    max: 25, color: "#DB2777" },
 ];
+
+// Run'daki aktif kriterlere göre etkili max puanları hesaplar
+function buildActiveCategories(run) {
+  const softOn = splitList(run?.softSkills).length > 0;
+  const eduOn  = splitList(run?.educationRequirements).length > 0;
+  const projOn = run?.requireProjectOrCertificate === true;
+  const semOn  = run?.useSemanticSimilarity !== false;
+  const total  = 20 + (softOn?15:0) + (eduOn?10:0) + 20 + (projOn?10:0) + (semOn?25:0);
+  const eff    = (raw) => Math.round((raw / total) * 100);
+  return [
+    { key: "hardSkillScore",   label: "Teknik Beceriler",  rawMax: 20, effMax: eff(20),              active: true,   color: "#4F46E5" },
+    { key: "softSkillScore",   label: "Soft Skills",        rawMax: 15, effMax: softOn ? eff(15) : 0, active: softOn, color: "#0891B2" },
+    { key: "experienceScore",  label: "Deneyim",            rawMax: 20, effMax: eff(20),              active: true,   color: "#059669" },
+    { key: "educationScore",   label: "Eğitim",             rawMax: 10, effMax: eduOn  ? eff(10) : 0, active: eduOn,  color: "#D97706" },
+    { key: "projectCertScore", label: "Proje / Sertifika",  rawMax: 10, effMax: projOn ? eff(10) : 0, active: projOn, color: "#7C3AED" },
+    { key: "semanticScore",    label: "Anlamsal Uyum",      rawMax: 25, effMax: semOn  ? eff(25) : 0, active: semOn,  color: "#DB2777" },
+  ];
+}
 
 const RANK_STYLES = [
   { bg: "linear-gradient(135deg,#F59E0B,#D97706)", color: "#fff", icon: <StarFilled /> },
@@ -97,36 +117,53 @@ function ScoreRing({ score }) {
 
 // ── CategoryBar ───────────────────────────────────────────────────────────────
 
-function CategoryBar({ label, score, max, color }) {
-  const pct = max > 0 ? Math.round((score / max) * 100) : 0;
+function CategoryBar({ label, score, max, color, active = true }) {
+  const pct = (active && max > 0) ? Math.round((score / max) * 100) : 0;
   return (
-    <div style={{ marginBottom: 8 }}>
+    <div style={{ marginBottom: 8, opacity: active ? 1 : 0.45 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-        <Text style={{ fontSize: 12, color: "#6B7280" }}>{label}</Text>
-        <Text strong style={{ fontSize: 12, color }}>
-          {score?.toFixed(1) ?? "0"} <Text style={{ fontSize: 10, color: "#9CA3AF" }}>/ {max}</Text>
+        <Text style={{ fontSize: 12, color: active ? "#6B7280" : "#D1D5DB", textDecoration: active ? "none" : "line-through" }}>
+          {label}
         </Text>
+        {active ? (
+          <Text strong style={{ fontSize: 12, color }}>
+            {score?.toFixed(1) ?? "0"} <Text style={{ fontSize: 10, color: "#9CA3AF" }}>/ {max}</Text>
+          </Text>
+        ) : (
+          <Text style={{ fontSize: 11, color: "#D1D5DB" }}>devre dışı</Text>
+        )}
       </div>
-      <Progress
-        percent={pct} showInfo={false}
-        strokeColor={color} trailColor="#F1F5F9"
-        strokeWidth={5}
-        style={{ margin: 0 }}
-      />
+      {active && (
+        <Progress percent={pct} showInfo={false} strokeColor={color} trailColor="#F1F5F9" strokeWidth={5} style={{ margin: 0 }} />
+      )}
     </div>
   );
 }
 
 // ── CandidateCard ─────────────────────────────────────────────────────────────
 
-function CandidateCard({ item, rank, onPreview, isCompared, onToggleCompare, compareDisabled, onNoteSaved }) {
-  const [expanded,   setExpanded]   = useState(false);
-  const [savedNote,  setSavedNote]  = useState(item.note || "");
-  const [editMode,   setEditMode]   = useState(false);
-  const [noteInput,  setNoteInput]  = useState("");
+function CandidateCard({ item, rank, onPreview, isCompared, onToggleCompare, compareDisabled, onNoteSaved, categories, minExperienceYears }) {
+  const [expanded,     setExpanded]     = useState(false);
+  const [savedNote,    setSavedNote]    = useState(item.note || "");
+  const [editMode,     setEditMode]     = useState(false);
+  const [noteInput,    setNoteInput]    = useState("");
+  const [explainOpen,  setExplainOpen]  = useState(false);
+  const [explanation,  setExplanation]  = useState("");
   const isPdf = (item.fileName || "").toLowerCase().endsWith(".pdf");
 
-  const { mutateAsync: saveNote, isPending: isSaving } = useUpdateResultNote();
+  const { mutateAsync: saveNote,     isPending: isSaving    } = useUpdateResultNote();
+  const { mutateAsync: explainResult, isPending: isExplaining } = useExplainResult();
+
+  const handleExplain = async () => {
+    setExplainOpen(true);
+    if (explanation) return;
+    try {
+      const res = await explainResult(item.id);
+      setExplanation(res?.data?.explanation || "Açıklama oluşturulamadı.");
+    } catch {
+      setExplanation("Puan gerekçesi şu an alınamıyor. Lütfen tekrar deneyin.");
+    }
+  };
 
   const handleSaveNote = async () => {
     try {
@@ -222,6 +259,11 @@ function CandidateCard({ item, rank, onPreview, isCompared, onToggleCompare, com
                   <span>·</span>
                   <Text style={{ color: "#9CA3AF", fontSize: 12 }}>
                     {item.experienceYears} yıl deneyim
+                    {minExperienceYears > 0 && (
+                      <span style={{ color: item.experienceYears >= minExperienceYears ? "#10B981" : "#EF4444" }}>
+                        {" "}(min. {minExperienceYears} yıl)
+                      </span>
+                    )}
                   </Text>
                 </>
               )}
@@ -262,6 +304,22 @@ function CandidateCard({ item, rank, onPreview, isCompared, onToggleCompare, com
             </Button>
           </Col>
 
+          {/* Detaylı Rapor butonu */}
+          <Col flex="none">
+            <Button
+              size="small"
+              onClick={handleExplain}
+              icon={<RobotOutlined />}
+              style={{
+                borderRadius: 8, fontSize: 12, height: 28,
+                background: "#EEF2FF", color: "#3940C1",
+                borderColor: "#C7D2FE", fontWeight: 600,
+              }}
+            >
+              Rapor
+            </Button>
+          </Col>
+
           {/* Önizle / İndir butonu */}
           {item.analysisFileId && (
             <Col flex="none">
@@ -290,6 +348,35 @@ function CandidateCard({ item, rank, onPreview, isCompared, onToggleCompare, com
         </Row>
       </div>
 
+      {/* ── Detaylı Rapor modalı ── */}
+      <Modal
+        open={explainOpen}
+        onCancel={() => setExplainOpen(false)}
+        footer={null}
+        width={620}
+        destroyOnHidden
+        title={
+          <Space>
+            <RobotOutlined style={{ color: "#3940C1" }} />
+            <span style={{ fontWeight: 700 }}>Aday Değerlendirme Raporu</span>
+            <span style={{ fontWeight: 400, color: "#9CA3AF", fontSize: 13 }}>
+              — {item.candidateName || "İsimsiz Aday"}
+            </span>
+          </Space>
+        }
+      >
+        {isExplaining ? (
+          <div style={{ textAlign: "center", padding: "52px 0" }}>
+            <Spin size="large" />
+            <Text style={{ display: "block", marginTop: 16, color: "#6B7280", fontSize: 13 }}>
+              GPT-4o mini rapor hazırlıyor...
+            </Text>
+          </div>
+        ) : (
+          <ReportContent text={explanation} />
+        )}
+      </Modal>
+
       {/* ── Genişletilmiş bölüm ── */}
       {expanded && (
         <>
@@ -303,11 +390,12 @@ function CandidateCard({ item, rank, onPreview, isCompared, onToggleCompare, com
                   PUAN DAĞILIMI
                 </Text>
                 <div style={{ marginTop: 12 }}>
-                  {SCORE_CATEGORIES.map(({ key, label, max, color: c }) => {
+                  {(categories ?? SCORE_CATEGORIES.map(c => ({ ...c, effMax: c.max, rawMax: c.max, active: true }))).map(({ key, label, effMax, rawMax, active, color: c }) => {
                     const raw = key.replace(/([A-Z])/g, "_$1").toLowerCase();
-                    const val = item[raw] ?? item[key] ?? 0;
+                    const rawVal = item[raw] ?? item[key] ?? 0;
+                    const displayVal = (active && rawMax > 0) ? Math.round((rawVal / rawMax) * effMax * 10) / 10 : 0;
                     return (
-                      <CategoryBar key={key} label={label} score={val} max={max} color={c} />
+                      <CategoryBar key={key} label={label} score={displayVal} max={effMax} color={c} active={active} />
                     );
                   })}
                 </div>
@@ -372,6 +460,9 @@ function CandidateCard({ item, rank, onPreview, isCompared, onToggleCompare, com
                     background: "#fff", borderRadius: 12,
                     border: "1px solid #E9EDF5",
                   }}>
+                    <Text style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", letterSpacing: 0.5, display: "block", marginBottom: 4 }}>
+                      DEĞERLENDİRME
+                    </Text>
                     <Text style={{ fontSize: 12, color: "#4B5563", lineHeight: 1.7 }}>
                       {item.summary}
                     </Text>
@@ -464,6 +555,8 @@ function CandidateCard({ item, rank, onPreview, isCompared, onToggleCompare, com
                   )}
                 </div>
               </Col>
+
+
             </Row>
           </div>
         </>
@@ -474,8 +567,10 @@ function CandidateCard({ item, rank, onPreview, isCompared, onToggleCompare, com
 
 // ── CompareModal ──────────────────────────────────────────────────────────────
 
-function CompareModal({ items, open, onClose }) {
+function CompareModal({ items, open, onClose, categories }) {
   if (!items.length) return null;
+
+  const cats = categories ?? SCORE_CATEGORIES.map(c => ({ ...c, effMax: c.max, rawMax: c.max, active: true }));
 
   const getScore = (item, key) => {
     const snake = key.replace(/([A-Z])/g, "_$1").toLowerCase();
@@ -533,16 +628,17 @@ function CompareModal({ items, open, onClose }) {
                 PUAN DAĞILIMI
               </Text>
               <div style={{ marginTop: 8, marginBottom: 14 }}>
-                {SCORE_CATEGORIES.map(({ key, label, max, color: c }) => {
-                  const val = getScore(item, key);
-                  const isWinner = items.length > 1 && val > 0 && val === maxPer(key);
+                {cats.map(({ key, label, effMax, rawMax, active, color: c }) => {
+                  const rawVal = getScore(item, key);
+                  const isWinner = active && items.length > 1 && rawVal > 0 && rawVal === maxPer(key);
+                  const displayVal = (active && rawMax > 0) ? Math.round((rawVal / rawMax) * effMax * 10) / 10 : 0;
                   return (
                     <div key={key} style={{
                       padding: "3px 6px", borderRadius: 8, marginBottom: 4,
                       background: isWinner ? "#F0FDF4" : "transparent",
                       border: isWinner ? "1px solid #BBF7D0" : "1px solid transparent",
                     }}>
-                      <CategoryBar label={label} score={val} max={max} color={isWinner ? "#10B981" : c} />
+                      <CategoryBar label={label} score={displayVal} max={effMax} color={isWinner ? "#10B981" : c} active={active} />
                     </div>
                   );
                 })}
@@ -599,6 +695,192 @@ function CompareModal({ items, open, onClose }) {
   );
 }
 
+// ── Rapor görüntüleyici ───────────────────────────────────────────────────────
+
+const SECTION_COLORS = {
+  "GENEL DEĞERLENDİRME": { bg: "#EEF2FF", border: "#C7D2FE", icon: "📋" },
+  "TEKNİK YETKİNLİK":    { bg: "#F0FDF4", border: "#BBF7D0", icon: "💻" },
+  "DENEYİM VE EĞİTİM":   { bg: "#FFF7ED", border: "#FED7AA", icon: "🎓" },
+  "GÜÇLÜ YÖNLER":         { bg: "#F0FDF4", border: "#86EFAC", icon: "✅" },
+  "GELİŞİM ALANLARI":     { bg: "#FFF1F2", border: "#FECDD3", icon: "⚠️" },
+  "İŞE ALIM TAVSİYESİ":  { bg: "#EFF6FF", border: "#BFDBFE", icon: "🎯" },
+};
+
+function ReportContent({ text }) {
+  if (!text) return null;
+
+  const sections = [];
+  let currentTitle = null;
+  let currentLines = [];
+
+  text.split("\n").forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    const isHeader = trimmed === trimmed.toUpperCase() && trimmed.length > 4 && /^[A-ZÇĞİÖŞÜ\s]+$/.test(trimmed);
+    if (isHeader) {
+      if (currentTitle) sections.push({ title: currentTitle, body: currentLines.join(" ").trim() });
+      currentTitle = trimmed;
+      currentLines = [];
+    } else {
+      currentLines.push(trimmed);
+    }
+  });
+  if (currentTitle) sections.push({ title: currentTitle, body: currentLines.join(" ").trim() });
+
+  if (sections.length === 0) {
+    return (
+      <div style={{ padding: "8px 4px" }}>
+        <div style={{ padding: "16px 18px", borderRadius: 12, background: "#F8FAFF", border: "1px solid #E8EDFF" }}>
+          <Text style={{ fontSize: 14, color: "#374151", lineHeight: 1.85, display: "block", whiteSpace: "pre-wrap" }}>
+            {text}
+          </Text>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 10, padding: "4px 0 8px" }}>
+      {sections.map(({ title, body }) => {
+        const style = SECTION_COLORS[title] || { bg: "#F9FAFB", border: "#E5E7EB", icon: "•" };
+        return (
+          <div key={title} style={{
+            padding: "12px 16px", borderRadius: 12,
+            background: style.bg, border: `1px solid ${style.border}`,
+          }}>
+            <Text style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", letterSpacing: 0.6, display: "block", marginBottom: 5 }}>
+              {style.icon} {title}
+            </Text>
+            <Text style={{ fontSize: 13, color: "#374151", lineHeight: 1.75, display: "block" }}>
+              {body}
+            </Text>
+          </div>
+        );
+      })}
+      <Text style={{ fontSize: 11, color: "#9CA3AF", textAlign: "right" }}>
+        GPT-4o mini tarafından üretilmiştir
+      </Text>
+    </div>
+  );
+}
+
+// ── Kriter Özeti ─────────────────────────────────────────────────────────────
+
+function CriteriaCard({ run }) {
+  const [open, setOpen] = useState(false);
+  if (!run) return null;
+
+  const hardSkills = splitList(run.hardSkills);
+  const softSkills = splitList(run.softSkills);
+  const education  = splitList(run.educationRequirements);
+
+  return (
+    <Card
+      style={{
+        borderRadius: 16,
+        border: "1.5px solid #C7D2FE",
+        background: "#F5F6FF",
+        marginBottom: 24,
+      }}
+      styles={{ body: { padding: "14px 18px" } }}
+    >
+      <div
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Space>
+          <div style={{
+            width: 28, height: 28, borderRadius: 8,
+            background: "#EEF2FF", display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#3940C1", fontSize: 14,
+          }}>
+            <BulbOutlined />
+          </div>
+          <Text strong style={{ fontSize: 13, color: "#3940C1" }}>
+            Analiz Kriterleri
+          </Text>
+          {run.runName && (
+            <Text style={{ fontSize: 12, color: "#6B7280" }}>— {run.runName}</Text>
+          )}
+        </Space>
+        <Button
+          type="text"
+          size="small"
+          icon={open ? <CaretUpOutlined /> : <CaretDownOutlined />}
+          style={{ color: "#6B7280" }}
+        />
+      </div>
+
+      {open && (
+        <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
+          {hardSkills.length > 0 && (
+            <div>
+              <Text style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", letterSpacing: 0.5, display: "block", marginBottom: 6 }}>
+                TEKNİK BECERİLER
+              </Text>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {hardSkills.map((s) => (
+                  <Tag key={s} color="blue" style={{ borderRadius: 999, marginInlineEnd: 0, fontSize: 12 }}>{s}</Tag>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {softSkills.length > 0 && (
+            <div>
+              <Text style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", letterSpacing: 0.5, display: "block", marginBottom: 6 }}>
+                SOFT SKİLLS
+              </Text>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {softSkills.map((s) => (
+                  <Tag key={s} color="cyan" style={{ borderRadius: 999, marginInlineEnd: 0, fontSize: 12 }}>{s}</Tag>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {education.length > 0 && (
+            <div>
+              <Text style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", letterSpacing: 0.5, display: "block", marginBottom: 6 }}>
+                EĞİTİM GEREKSİNİMLERİ
+              </Text>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {education.map((s) => (
+                  <Tag key={s} color="gold" style={{ borderRadius: 999, marginInlineEnd: 0, fontSize: 12 }}>{s}</Tag>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {run.minExperienceYears > 0 && (
+              <Tag style={{ borderRadius: 999, fontSize: 12, padding: "2px 12px", background: "#F0FDF4", color: "#059669", border: "1px solid #BBF7D0" }}>
+                Min. {run.minExperienceYears} yıl deneyim
+              </Tag>
+            )}
+            <Tag style={{
+              borderRadius: 999, fontSize: 12, padding: "2px 12px",
+              background: run.requireProjectOrCertificate ? "#EEF2FF" : "#F9FAFB",
+              color: run.requireProjectOrCertificate ? "#3940C1" : "#9CA3AF",
+              border: `1px solid ${run.requireProjectOrCertificate ? "#C7D2FE" : "#E5E7EB"}`,
+            }}>
+              {run.requireProjectOrCertificate ? "✓" : "✗"} Proje / Sertifika
+            </Tag>
+            <Tag style={{
+              borderRadius: 999, fontSize: 12, padding: "2px 12px",
+              background: run.useSemanticSimilarity ? "#EEF2FF" : "#F9FAFB",
+              color: run.useSemanticSimilarity ? "#3940C1" : "#9CA3AF",
+              border: `1px solid ${run.useSemanticSimilarity ? "#C7D2FE" : "#E5E7EB"}`,
+            }}>
+              {run.useSemanticSimilarity ? "✓" : "✗"} Anlamsal Benzerlik
+            </Tag>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ── Ana bileşen ───────────────────────────────────────────────────────────────
 
 export default function AnalysisResultsPage() {
@@ -606,6 +888,8 @@ export default function AnalysisResultsPage() {
   const { runId } = useParams();
 
   const { data, isLoading } = useRunResults(runId);
+  const { data: runData }   = useRunById(runId);
+  const run = runData?.data ?? null;
   const results = data?.data || [];
 
   const [searchText, setSearchText] = useState("");
@@ -647,52 +931,166 @@ export default function AnalysisResultsPage() {
   };
 
   const exportCSV = () => {
-    // Türkçe Excel lokasyonu ondalık ayraç olarak virgül bekler;
-    // noktalı sayılar (16.6) tarih olarak okunur (16 Haziran).
-    const fmtNum = (v) => String(v != null ? Math.round(v * 10) / 10 : 0).replace(".", ",");
-    const fmt = (v) => {
-      if (typeof v === "number") return `"${fmtNum(v)}"`;
-      return `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const round1 = (v) => Math.round((v ?? 0) * 10) / 10;
+
+    // ── Stil şablonları ───────────────────────────────────────────────────────
+    const hdrStyle = (bgHex) => ({
+      font:      { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
+      fill:      { fgColor: { rgb: bgHex } },
+      alignment: { horizontal: "center", vertical: "center", wrapText: true },
+      border: {
+        top:    { style: "thin", color: { rgb: "CCCCCC" } },
+        bottom: { style: "thin", color: { rgb: "CCCCCC" } },
+        left:   { style: "thin", color: { rgb: "CCCCCC" } },
+        right:  { style: "thin", color: { rgb: "CCCCCC" } },
+      },
+    });
+
+    const cellStyle = (bgHex = "FFFFFF", bold = false, align = "center", wrap = false) => ({
+      font:      { bold, sz: 10, color: { rgb: "1F2937" } },
+      fill:      { fgColor: { rgb: bgHex } },
+      alignment: { horizontal: align, vertical: "center", wrapText: wrap },
+      border: {
+        top:    { style: "thin", color: { rgb: "E5E7EB" } },
+        bottom: { style: "thin", color: { rgb: "E5E7EB" } },
+        left:   { style: "thin", color: { rgb: "E5E7EB" } },
+        right:  { style: "thin", color: { rgb: "E5E7EB" } },
+      },
+    });
+
+    const scoreStyle = (score) => {
+      const bg = score >= 75 ? "D1FAE5" : score >= 55 ? "DBEAFE" : score >= 35 ? "FEF3C7" : "FEE2E2";
+      const fg = score >= 75 ? "065F46" : score >= 55 ? "1E40AF" : score >= 35 ? "92400E" : "991B1B";
+      return {
+        font:      { bold: true, sz: 11, color: { rgb: fg } },
+        fill:      { fgColor: { rgb: bg } },
+        alignment: { horizontal: "center", vertical: "center" },
+        border: cellStyle().border,
+      };
     };
 
-    const headers = [
-      "Sıra", "Aday Adı", "Dosya", "Toplam Puan",
-      "Teknik Beceri", "Eşleşen Beceriler", "Eksik Beceriler",
-      "Soft Skill",
-      "Deneyim", "Deneyim Yılı",
-      "Eğitim", "Proje/Sertifika", "Anlamsal Uyum",
-      "Not", "Özet",
+    const rankStyle = (rank) => {
+      const cfg = rank === 0 ? { bg: "FEF3C7", fg: "92400E" }
+                : rank === 1 ? { bg: "F3F4F6", fg: "374151" }
+                : rank === 2 ? { bg: "FEF0E7", fg: "7C3AED" }
+                : { bg: "F9FAFB", fg: "6B7280" };
+      return {
+        font:      { bold: rank < 3, sz: 11, color: { rgb: cfg.fg } },
+        fill:      { fgColor: { rgb: cfg.bg } },
+        alignment: { horizontal: "center", vertical: "center" },
+        border:    cellStyle().border,
+      };
+    };
+
+    // ── Başlık renkleri (sütun başına) ────────────────────────────────────────
+    const HEADER_COLORS = [
+      "374151","374151","374151",  // Sıra, Aday, Dosya
+      "1E3A8A",                    // Toplam Puan
+      "4F46E5","4F46E5","4F46E5", // Teknik
+      "0E7490",                    // Soft
+      "065F46","065F46",           // Deneyim
+      "92400E",                    // Eğitim
+      "6D28D9",                    // Proje/Sert
+      "9D174D",                    // Anlamsal
+      "374151","374151",           // Not, Özet
     ];
-    const rows = sorted.map((r, i) => [
+
+    const HEADERS = [
+      "Sıra","Aday Adı","Dosya","Toplam Puan",
+      "Teknik Beceri","Eşleşen Beceriler","Eksik Beceriler",
+      "Soft Skill","Deneyim","Deneyim Yılı",
+      "Eğitim","Proje / Sertifika","Anlamsal Uyum",
+      "Not","Özet",
+    ];
+
+    // ── Veri satırları ────────────────────────────────────────────────────────
+    const dataRows = sorted.map((r, i) => [
       i + 1,
       r.candidateName ?? "",
       r.fileName ?? "",
-      r.finalScore ?? 0,
-      r.hardSkillScore ?? 0,
-      splitList(r.matchedHardSkills).join("; "),
-      splitList(r.missingHardSkills).join("; "),
-      r.softSkillScore ?? 0,
-      r.experienceScore ?? 0,
+      round1(r.finalScore),
+      round1(r.hardSkillScore),
+      splitList(r.matchedHardSkills).join(", "),
+      splitList(r.missingHardSkills).join(", "),
+      round1(r.softSkillScore),
+      round1(r.experienceScore),
       r.experienceYears ?? 0,
-      r.educationScore ?? 0,
-      r.projectCertScore ?? 0,
-      r.semanticScore ?? 0,
+      round1(r.educationScore),
+      round1(r.projectCertScore),
+      round1(r.semanticScore),
       notesMap[r.id] ?? r.note ?? "",
       r.summary ?? "",
     ]);
 
-    const csv = [headers, ...rows]
-      .map((row) => row.map(fmt).join(";"))
-      .join("\r\n");
+    // ── Worksheet oluştur ─────────────────────────────────────────────────────
+    const ws = {};
+    const range = { s: { c: 0, r: 0 }, e: { c: HEADERS.length - 1, r: dataRows.length } };
 
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `analiz-${runId}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    // Başlık satırı (satır 0)
+    HEADERS.forEach((h, c) => {
+      const ref = XLSXStyle.utils.encode_cell({ r: 0, c });
+      ws[ref] = { v: h, t: "s", s: hdrStyle(HEADER_COLORS[c]) };
+    });
+
+    // Veri satırları (satır 1+)
+    dataRows.forEach((row, ri) => {
+      const isEven = ri % 2 === 0;
+      const baseBg = isEven ? "F9FAFB" : "FFFFFF";
+
+      row.forEach((val, c) => {
+        const ref = XLSXStyle.utils.encode_cell({ r: ri + 1, c });
+        const score = round1(sorted[ri]?.finalScore ?? 0);
+
+        if (c === 0) {
+          ws[ref] = { v: val, t: "n", s: rankStyle(ri) };
+        } else if (c === 3) {
+          ws[ref] = { v: val, t: "n", s: scoreStyle(score) };
+        } else if ([4, 7, 8, 9, 10, 11, 12].includes(c)) {
+          ws[ref] = { v: val, t: "n", s: cellStyle(baseBg, false, "center") };
+        } else if (c === 1) {
+          ws[ref] = { v: val, t: "s", s: cellStyle(baseBg, true, "left") };
+        } else {
+          ws[ref] = { v: val, t: "s", s: cellStyle(baseBg, false, "left") };
+        }
+      });
+    });
+
+    ws["!ref"] = XLSXStyle.utils.encode_range(range);
+
+    // Özet sütunu için max karakter uzunluğunu hesapla
+    const summaryMaxLen = Math.min(
+      Math.max(...dataRows.map((r) => String(r[14] ?? "").length), 10),
+      120
+    );
+
+    // Sütun genişlikleri
+    ws["!cols"] = [
+      { wch: 6 },             // Sıra
+      { wch: 22 },            // Aday
+      { wch: 22 },            // Dosya
+      { wch: 12 },            // Toplam
+      { wch: 12 },            // Teknik
+      { wch: 30 },            // Eşleşen
+      { wch: 25 },            // Eksik
+      { wch: 10 },            // Soft
+      { wch: 10 },            // Deneyim skor
+      { wch: 10 },            // Deneyim yıl
+      { wch: 10 },            // Eğitim
+      { wch: 12 },            // Proje
+      { wch: 12 },            // Anlamsal
+      { wch: 45 },            // Not
+      { wch: summaryMaxLen }, // Özet — içeriğe göre
+    ];
+
+    // Sabit satır yükseklikleri — bozulmayı önler
+    ws["!rows"] = [{ hpt: 30 }, ...dataRows.map(() => ({ hpt: 18 }))];
+
+    const wb = XLSXStyle.utils.book_new();
+    XLSXStyle.utils.book_append_sheet(wb, ws, "Analiz Sonuçları");
+    XLSXStyle.writeFile(wb, `analiz-${runId}.xlsx`);
   };
+
+  const activeCategories = useMemo(() => buildActiveCategories(run), [run]);
 
   const chartData = useMemo(() => {
     if (!results.length) return null;
@@ -714,14 +1112,16 @@ export default function AnalysisResultsPage() {
     const avg = (key) =>
       Math.round(results.reduce((s, r) => s + (r[key] || 0), 0) / results.length * 10) / 10;
 
-    const catBars = SCORE_CATEGORIES.map(({ key, label, max, color }) => ({
-      label,
-      pct: Math.round((avg(key) / max) * 100),
-      color,
-    }));
+    const catBars = activeCategories
+      .filter(({ active }) => active)
+      .map(({ key, label, rawMax, color }) => ({
+        label,
+        pct: rawMax > 0 ? Math.round((avg(key) / rawMax) * 100) : 0,
+        color,
+      }));
 
     return { bins, catBars };
-  }, [results]);
+  }, [results, activeCategories]);
 
   // Özet istatistikler
   const stats = useMemo(() => {
@@ -792,6 +1192,9 @@ export default function AnalysisResultsPage() {
                 Adaylar 100 puan üzerinden değerlendirildi. Detay için karta tıklayın.
               </Text>
             </div>
+
+            {/* Kriter özeti */}
+            <CriteriaCard run={run} />
 
             {/* İstatistik kartları */}
             {stats && (
@@ -927,7 +1330,7 @@ export default function AnalysisResultsPage() {
                       fontWeight: 600,
                     }}
                   >
-                    CSV
+                    Excel
                   </Button>
                 </Col>
               </Row>
@@ -954,6 +1357,8 @@ export default function AnalysisResultsPage() {
                     onToggleCompare={toggleCompare}
                     compareDisabled={compareIds.size >= 3}
                     onNoteSaved={handleNoteSaved}
+                    categories={activeCategories}
+                    minExperienceYears={run?.minExperienceYears ?? 0}
                   />
                 ))}
               </div>
@@ -1018,6 +1423,7 @@ export default function AnalysisResultsPage() {
         items={compareItems}
         open={compareOpen}
         onClose={() => setCompareOpen(false)}
+        categories={activeCategories}
       />
 
       {/* ── PDF / DOCX Önizleme Modalı ── */}

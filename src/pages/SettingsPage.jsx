@@ -1,15 +1,17 @@
 import {
   Row, Col, Typography, Card, Avatar, Button,
-  Tag, notification,
+  Tag, notification, Form, Input,
 } from "antd";
 import {
   UserOutlined, LogoutOutlined,
   EditOutlined, SafetyOutlined, InfoCircleOutlined,
   CheckCircleOutlined, ArrowLeftOutlined, FileSearchOutlined,
+  LockOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import LoginNavbar from "../components/LoginNavbar";
 import { useUserAnalyses } from "../requests/AnalysisQueries";
+import { useChangePassword } from "../requests/UserQueries";
 
 const { Title, Text } = Typography;
 const ACCENT = "#3940C1";
@@ -60,7 +62,9 @@ function InfoRow({ label, value, tag, last }) {
 
 export default function SettingsPage() {
   const navigate  = useNavigate();
-  const [, ctx] = notification.useNotification();
+  const [api, ctx] = notification.useNotification();
+  const { mutateAsync: changePassword, isPending: isChanging } = useChangePassword();
+  const [passwordForm] = Form.useForm();
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const { data: analysesData } = useUserAnalyses(user.id);
@@ -217,6 +221,100 @@ export default function SettingsPage() {
                         </Text>
                       </div>
                     </div>
+                  </SectionCard>
+
+                  {/* Şifre Değiştir */}
+                  <SectionCard
+                    icon={<LockOutlined />}
+                    title="Şifre Değiştir"
+                    subtitle="Mevcut şifrenizi girerek yeni şifre belirleyin"
+                  >
+                    <Form
+                      form={passwordForm}
+                      layout="vertical"
+                      onFinish={async (values) => {
+                        try {
+                          await changePassword({
+                            currentPassword: values.currentPassword,
+                            newPassword: values.newPassword,
+                          });
+                          api.success({
+                            message: "Şifre Güncellendi",
+                            description: "Şifreniz başarıyla değiştirildi.",
+                            placement: "topRight",
+                          });
+                          passwordForm.resetFields();
+                        } catch (err) {
+                          api.error({
+                            message: "Hata",
+                            description: err?.response?.data?.message || "Şifre güncellenemedi.",
+                            placement: "topRight",
+                          });
+                        }
+                      }}
+                      style={{ gap: 0 }}
+                    >
+                      <Form.Item
+                        label={<Text style={{ color: "#111827", fontWeight: 600, fontSize: 13 }}>Mevcut Şifre</Text>}
+                        name="currentPassword"
+                        rules={[{ required: true, message: "Mevcut şifre zorunlu" }]}
+                        style={{ marginBottom: 14 }}
+                      >
+                        <Input.Password
+                          prefix={<LockOutlined style={{ color: "#9CA3AF" }} />}
+                          placeholder="••••••••"
+                          style={{ borderRadius: 10, height: 42 }}
+                        />
+                      </Form.Item>
+
+                      <Form.Item
+                        label={<Text style={{ color: "#111827", fontWeight: 600, fontSize: 13 }}>Yeni Şifre</Text>}
+                        name="newPassword"
+                        rules={[
+                          { required: true, message: "Yeni şifre zorunlu" },
+                          { min: 6, message: "En az 6 karakter olmalı" },
+                        ]}
+                        style={{ marginBottom: 14 }}
+                      >
+                        <Input.Password
+                          prefix={<LockOutlined style={{ color: "#3940c1" }} />}
+                          placeholder="••••••••"
+                          style={{ borderRadius: 10, height: 42 }}
+                        />
+                      </Form.Item>
+
+                      <Form.Item
+                        label={<Text style={{ color: "#111827", fontWeight: 600, fontSize: 13 }}>Yeni Şifre (Tekrar)</Text>}
+                        name="confirmPassword"
+                        dependencies={["newPassword"]}
+                        rules={[
+                          { required: true, message: "Şifre tekrarı zorunlu" },
+                          ({ getFieldValue }) => ({
+                            validator(_, value) {
+                              if (!value || getFieldValue("newPassword") === value) return Promise.resolve();
+                              return Promise.reject(new Error("Şifreler eşleşmiyor."));
+                            },
+                          }),
+                        ]}
+                        style={{ marginBottom: 20 }}
+                      >
+                        <Input.Password
+                          prefix={<LockOutlined style={{ color: "#3940c1" }} />}
+                          placeholder="••••••••"
+                          style={{ borderRadius: 10, height: 42 }}
+                        />
+                      </Form.Item>
+
+                      <Button
+                        type="primary" htmlType="submit" loading={isChanging} block
+                        style={{
+                          borderRadius: 999, height: 44, fontWeight: 600,
+                          background: "#3940c1", border: "none",
+                        }}
+                      >
+                        Şifremi Güncelle
+                      </Button>
+                    </Form>
                   </SectionCard>
 
                   {/* Analiz Özeti */}

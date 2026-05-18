@@ -1,4 +1,3 @@
-import React from "react";
 import { Typography, Button, Space } from "antd";
 import {
   HomeOutlined,
@@ -86,7 +85,7 @@ const Navbar = () => {
           {/* Giriş */}
           <Button
             type="text"
-            onClick={() => navigate("/Login")}
+            onClick={() => navigate("/login")}
             icon={<LoginOutlined style={{ color: PRIMARY }} />}
             style={{
               color: "#111827",
@@ -99,7 +98,7 @@ const Navbar = () => {
           {/* Kayıt */}
           <Button
             type="text"
-            onClick={() => navigate("/SignUp")}
+            onClick={() => navigate("/signup")}
             icon={<UserAddOutlined  style={{ color: PRIMARY }}/>}
             style={{
               fontWeight: 500,

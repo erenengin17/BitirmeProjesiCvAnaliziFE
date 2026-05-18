@@ -29,3 +29,21 @@ export const useResendCode = () => {
     mutationFn: (payload) => UserManager.resendCode(payload),
   });
 };
+
+export const useForgotPassword = () => {
+  return useMutation({
+    mutationFn: (payload) => UserManager.forgotPassword(payload),
+  });
+};
+
+export const useResetPassword = () => {
+  return useMutation({
+    mutationFn: (payload) => UserManager.resetPassword(payload),
+  });
+};
+
+export const useChangePassword = () => {
+  return useMutation({
+    mutationFn: (payload) => UserManager.changePassword(payload),
+  });
+};
