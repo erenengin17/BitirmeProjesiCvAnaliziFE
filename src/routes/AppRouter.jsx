@@ -8,6 +8,8 @@ import AnalysisDetailPage from "../pages/AnalysisDetailPage";
 import AnalysisResultsPage from "../pages/AnalysisResultsPage";
 import SettingsPage from "../pages/SettingsPage";
 import ForgotPasswordPage from "../pages/ForgotPasswordPage";
+import PipelineDashboardPage from "../pages/PipelineDashboardPage";
+import PipelineDetailPage from "../pages/PipelineDetailPage";
 
 export default function AppRouter() {
   return (
@@ -19,6 +21,8 @@ export default function AppRouter() {
       <Route path="/analizler" element={<AnalysesPage />} />
       <Route path="/analizler/:id" element={<AnalysisDetailPage />} />
       <Route path="/analizler/:runId/results" element={<AnalysisResultsPage />} />
+      <Route path="/pipeline" element={<PipelineDashboardPage />} />
+      <Route path="/pipeline/:analysisId" element={<PipelineDetailPage />} />
       <Route path="/ayarlar" element={<SettingsPage />} />
       <Route path="/sifremi-unuttum" element={<ForgotPasswordPage />} />
     </Routes>

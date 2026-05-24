@@ -80,7 +80,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F7F8FC" }}>
+    <div style={{ minHeight: "100vh", background: "#eef0f7" }}>
       {ctx}
       <LoginNavbar />
 

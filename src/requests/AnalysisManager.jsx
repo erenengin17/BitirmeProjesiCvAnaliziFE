@@ -70,6 +70,31 @@ deleteAnalysis(analysisId) {
   cloneAnalysis(analysisId, newName) {
     return axiosInstance.post(`/api/analyses/${analysisId}/clone`, { newName });
   }
+
+  extractJob(jobText) {
+    return axiosInstance.post("/api/analyses/extract-job", { jobText });
+  }
+
+  updateResultStatus(resultId, status) {
+    return axiosInstance.patch(`/api/analyses/results/${resultId}/status`, { status });
+  }
+
+  updateInterviewDate(resultId, interviewDate) {
+    return axiosInstance.put(`/api/analyses/results/${resultId}/interview-date`, { interviewDate });
+  }
+
+  bulkUpdateStatus(resultIds, status) {
+    return axiosInstance.patch("/api/analyses/results/bulk-status", { resultIds, status });
+  }
+
+  getPipelineResults() {
+    return axiosInstance.get("/api/analyses/my/pipeline");
+  }
+
+  getStageLog(resultId) {
+    return axiosInstance.get(`/api/analyses/results/${resultId}/stage-log`);
+  }
+
 }
 
 export default new AnalysisManager();

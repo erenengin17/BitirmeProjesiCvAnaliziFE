@@ -7,6 +7,7 @@ import {
   LogoutOutlined,
   DownOutlined,
   SettingOutlined,
+  FunnelPlotOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import AtlasCvLogo from "../assets/images/YeniLogoAtlasCV.png";
@@ -103,7 +104,7 @@ const LoginNavbar = () => {
             Anasayfa
           </Button>
 
-<Button
+          <Button
             type="text"
             onClick={() => navigate("/analizler")}
             icon={<FileSearchOutlined style={{ color: PRIMARY }} />}
@@ -113,6 +114,18 @@ const LoginNavbar = () => {
             }}
           >
             Analizler
+          </Button>
+
+          <Button
+            type="text"
+            onClick={() => navigate("/pipeline")}
+            icon={<FunnelPlotOutlined style={{ color: PRIMARY }} />}
+            style={{
+              color: "#111827",
+              fontWeight: 500,
+            }}
+          >
+            Mülakat Takibi
           </Button>
 
           <Dropdown menu={{ items: profileItems }} trigger={["click"]}>

@@ -80,7 +80,7 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#fafafa]">
+    <div style={{ minHeight: "100vh", background: "#eef0f7" }}>
       {/* NAVBAR */}
       <Navbar />
 

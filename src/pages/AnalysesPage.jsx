@@ -1,11 +1,11 @@
 import { useState } from "react";
 import {
   Row, Col, Typography, Card, Space, Tag, Button,
-  Spin, Empty, Modal, Form, Input, Popconfirm,
+  Spin, Empty, Modal, Form, Input, Popconfirm, message, notification,
 } from "antd";
 import {
   FileSearchOutlined, CalendarOutlined, FolderOpenOutlined,
-  RightOutlined, DeleteOutlined, EditOutlined, CopyOutlined,
+  RightOutlined, DeleteOutlined, EditOutlined, CopyOutlined, ArrowLeftOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,8 +17,6 @@ const { Title, Text, Paragraph } = Typography;
 export default function AnalysesPage() {
   const navigate    = useNavigate();
   const queryClient = useQueryClient();
-  const user        = JSON.parse(localStorage.getItem("user"));
-
   const { data, isLoading } = useUserAnalyses();
   const analyses = data?.data || [];
 
@@ -56,13 +54,18 @@ export default function AnalysesPage() {
   };
 
   const handleCloneConfirm = async () => {
-    const values = await cloneForm.validateFields();
-    const response = await cloneAnalysis({ analysisId: cloneModal.item.id, newName: values.newName });
-    const newId = response?.data?.id;
-    setCloneModal({ open: false, item: null });
-    cloneForm.resetFields();
-    queryClient.invalidateQueries({ queryKey: ["userAnalyses"] });
-    if (newId) navigate(`/analizler/${newId}`);
+    try {
+      const values = await cloneForm.validateFields();
+      const response = await cloneAnalysis({ analysisId: cloneModal.item.id, newName: values.newName });
+      const newId = response?.data?.id;
+      setCloneModal({ open: false, item: null });
+      cloneForm.resetFields();
+      queryClient.invalidateQueries({ queryKey: ["userAnalyses"] });
+      queryClient.invalidateQueries({ queryKey: ["recentAnalyses"] });
+      if (newId) navigate(`/analizler/${newId}`);
+    } catch {
+      message.error("Analiz kopyalanamadı.");
+    }
   };
 
   const handleDelete = async (analysisId, e) => {
@@ -70,6 +73,7 @@ export default function AnalysesPage() {
     await deleteAnalysis(analysisId);
     queryClient.invalidateQueries({ queryKey: ["userAnalyses"] });
     queryClient.invalidateQueries({ queryKey: ["recentAnalyses"] });
+    notification.success({ message: "Analiz silindi", placement: "top" });
   };
 
   const getStatusColor = (status) => {
@@ -79,12 +83,20 @@ export default function AnalysesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f7f8fc]">
+    <div style={{ minHeight: "100vh", background: "#eef0f7" }}>
       <LoginNavbar />
 
       <div style={{ paddingTop: 120, paddingBottom: 50 }}>
         <Row justify="center">
           <Col xs={22} md={21} lg={19} xl={17}>
+            <Button
+              icon={<ArrowLeftOutlined />}
+              onClick={() => navigate("/dashboard")}
+              style={{ marginBottom: 28, borderRadius: 999, height: 40 }}
+            >
+              Anasayfaya Dön
+            </Button>
+
             <div style={{ marginBottom: 28 }}>
               <Title level={1} style={{ color: "#111827", marginBottom: 10 }}>
                 Analizler
@@ -111,10 +123,21 @@ export default function AnalysesPage() {
                       style={{
                         borderRadius: 24, border: "1px solid #eef0f6",
                         boxShadow: "0 10px 24px rgba(0,0,0,0.05)", height: "100%",
+                        cursor: "pointer",
+                        transition: "box-shadow 0.2s, transform 0.2s",
                       }}
                       styles={{ body: { padding: 24 } }}
+                      onClick={() => navigate(`/analizler/${item.id}`)}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.boxShadow = "0 16px 40px rgba(57,64,193,0.13)";
+                        e.currentTarget.style.transform = "translateY(-3px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.boxShadow = "0 10px 24px rgba(0,0,0,0.05)";
+                        e.currentTarget.style.transform = "none";
+                      }}
                     >
-                      <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%" }}>
                         <div style={{
                           width: 56, height: 56, borderRadius: 18,
                           background: "linear-gradient(135deg, rgba(57,64,193,0.12), rgba(255,107,107,0.12))",
@@ -147,7 +170,7 @@ export default function AnalysesPage() {
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                           <Tag color={getStatusColor(item.status)}>{item.status}</Tag>
 
-                          <Space size={4}>
+                          <Space size={4} onClick={(e) => e.stopPropagation()}>
                             <Button
                               type="text" size="small" icon={<CopyOutlined />}
                               loading={isCloning}
@@ -163,7 +186,7 @@ export default function AnalysesPage() {
                             <Popconfirm
                               title="Analizi sil"
                               description="Bu analiz ve tüm sonuçları kalıcı olarak silinecek. Emin misin?"
-                              onConfirm={(e) => handleDelete(item.id, e || { stopPropagation: () => {} })}
+                              onConfirm={() => handleDelete(item.id, { stopPropagation: () => {} })}
                               onCancel={(e) => e?.stopPropagation?.()}
                               okText="Evet, sil"
                               cancelText="İptal"
@@ -176,14 +199,14 @@ export default function AnalysesPage() {
                               />
                             </Popconfirm>
                             <Button
-                              type="link" onClick={() => navigate(`/analizler/${item.id}`)}
+                              type="link" onClick={(e) => { e.stopPropagation(); navigate(`/analizler/${item.id}`); }}
                               style={{ padding: 0, color: "#3940c1", fontWeight: 600 }}
                             >
                               Detayları Gör <RightOutlined />
                             </Button>
                           </Space>
                         </div>
-                      </Space>
+                      </div>
                     </Card>
                   </Col>
                 ))}

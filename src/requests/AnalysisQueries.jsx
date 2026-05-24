@@ -100,6 +100,47 @@ export const useCloneAnalysis = () => {
   });
 };
 
+export const useExtractJob = () => {
+  return useMutation({
+    mutationFn: (jobText) => AnalysisManager.extractJob(jobText),
+  });
+};
+
+export const useUpdateResultStatus = () => {
+  return useMutation({
+    mutationFn: ({ resultId, status }) => AnalysisManager.updateResultStatus(resultId, status),
+  });
+};
+
+export const useBulkUpdateStatus = () => {
+  return useMutation({
+    mutationFn: ({ resultIds, status }) => AnalysisManager.bulkUpdateStatus(resultIds, status),
+  });
+};
+
+export const useUpdateInterviewDate = () => {
+  return useMutation({
+    mutationFn: ({ resultId, interviewDate }) =>
+      AnalysisManager.updateInterviewDate(resultId, interviewDate),
+  });
+};
+
+export const usePipelineResults = () => {
+  return useQuery({
+    queryKey: ["pipelineResults"],
+    queryFn: () => AnalysisManager.getPipelineResults(),
+  });
+};
+
+export const useStageLog = (resultId, enabled) => {
+  return useQuery({
+    queryKey: ["stageLog", resultId],
+    queryFn: () => AnalysisManager.getStageLog(resultId),
+    enabled: !!resultId && enabled,
+  });
+};
+
+
 export const useLastRun = (analysisId) => {
   return useQuery({
     queryKey: ["lastRun", analysisId],

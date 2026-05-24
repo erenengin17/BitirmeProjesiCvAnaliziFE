@@ -30,7 +30,6 @@ import {
   useCreateAnalysis,
   useRecentAnalyses,
 } from "../requests/AnalysisQueries";
-
 const { Title, Text, Paragraph } = Typography;
 const { Dragger } = Upload;
 const { TextArea } = Input;
@@ -190,7 +189,7 @@ const handleCreateAnalysis = async () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#f7f8fc]">
+    <div style={{ minHeight: "100vh", background: "#eef0f7" }}>
       {contextHolder}
       <LoginNavbar />
 
@@ -202,7 +201,7 @@ const handleCreateAnalysis = async () => {
             paddingBottom: 50,
             position: "relative",
             overflow: "hidden",
-            background: "#f7f8fc",
+            background: "#eef0f7",
           }}
         >
           <div
@@ -606,7 +605,7 @@ const handleCreateAnalysis = async () => {
                 </Col>
 
                 <Col xs={24} lg={9}>
-                  <Space direction="vertical" size={24} style={{ width: "100%" }}>
+                  <Space orientation="vertical" size={24} style={{ width: "100%" }}>
                     <Card
                       style={{
                         borderRadius: 24,
