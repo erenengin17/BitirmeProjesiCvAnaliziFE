@@ -211,6 +211,7 @@ const EDUCATION_OPTIONS = [
   "Matematik","İstatistik","Fizik",
   "Grafik Tasarım","İletişim Tasarımı","Görsel İletişim Tasarımı",
   "İşletme (Teknoloji Odaklı)","Ziraat Mühendisliği",
+  "Yüksek Lisans","Doktora",
 ];
 
 // ── Sağlık Sektörü Sabitleri ──────────────────────────────────────────────────
@@ -626,9 +627,12 @@ export default function AnalysisDetailPage() {
   const [latestRunId, setLatestRunId] = useState(null);
 
   // Progress modal state
-  const [progressStep, setProgressStep]   = useState(0);
-  const [progressPct,  setProgressPct]    = useState(0);
+  const [progressStep,  setProgressStep]  = useState(0);
+  const [progressPct,   setProgressPct]   = useState(0);
+  const [showComplete,  setShowComplete]  = useState(false);
   const progressTimer = useRef(null);
+  const completeTimer = useRef(null);
+  const wasRunning    = useRef(false);
 
   const ANALYSIS_STEPS = [
     { title: "PDF'ler Okunuyor",          desc: "CV dosyaları işleniyor ve metin çıkarılıyor…" },
@@ -640,13 +644,20 @@ export default function AnalysisDetailPage() {
   useEffect(() => {
     if (!isRunning) {
       clearInterval(progressTimer.current);
-      return;
+      if (wasRunning.current) {
+        wasRunning.current = false;
+        setProgressPct(100);
+        setProgressStep(3);
+        setShowComplete(true);
+        completeTimer.current = setTimeout(() => setShowComplete(false), 1000);
+      }
+      return () => clearTimeout(completeTimer.current);
     }
 
+    wasRunning.current = true;
     const cvCount = analysis?.cvCount || 10;
     const totalMs = Math.max(20_000, cvCount * 550);
     const tickMs  = 400;
-    // step ilerleme eşikleri (%)
     const stepAt  = [0, 10, 60, 83];
 
     setProgressStep(0);
@@ -658,11 +669,9 @@ export default function AnalysisDetailPage() {
 
       let pct;
       if (elapsed <= totalMs) {
-        // Ease-out: başta hızlı, sona doğru yavaşlar → 0%..90%
         const ratio = elapsed / totalMs;
         pct = 90 * (1 - Math.pow(1 - ratio, 2.5));
       } else {
-        // Tahmini süre aşıldı: 90%'dan 96%'ya asimptotik (hiç takılmaz)
         const overtime = elapsed - totalMs;
         pct = 90 + 6 * (1 - Math.exp(-overtime / totalMs));
       }
@@ -692,7 +701,10 @@ export default function AnalysisDetailPage() {
       if (d?.hard_skills?.length)       setSelectedSkills(d.hard_skills);
       if (d?.soft_skills?.length)       setSelectedSoftSkills(d.soft_skills);
       if (d?.min_experience_years)      setMinExperienceYears(d.min_experience_years);
-      if (d?.education?.length)         setSelectedEducation(d.education);
+      if (d?.education?.length) {
+        const matched = d.education.filter((e) => activeEducationOptions.includes(e));
+        setSelectedEducation(matched);
+      }
       api.success({ message: "İlan analiz edildi!", description: "Alanlar otomatik dolduruldu.", placement: "topRight" });
     } catch {
       api.error({ message: "İlan analiz edilemedi.", placement: "topRight" });
@@ -852,13 +864,44 @@ export default function AnalysisDetailPage() {
       };
       const response = await runAnalysisMutate({ analysisId: id, payload });
       const runId = response?.data?.runId || response?.data?.id || null;
+      const rejected = response?.data?.rejectedFiles || [];
+
+      // Tüm dosyalar reddedildiyse sonuç sayfasına gitme
+      if (rejected.length > 0 && !runId) {
+        const fileList = rejected.map(f => `• ${f.filename}: ${f.reason}`).join("\n");
+        api.error({
+          message: "Geçerli CV bulunamadı",
+          description: <div style={{ whiteSpace: "pre-line", fontSize: 12 }}>{fileList}</div>,
+          duration: 8,
+          placement: "topRight",
+        });
+        return;
+      }
+
       setLatestRunId(runId);
       await Promise.all([refetch(), refetchLastRun()]);
+      if (rejected && rejected.length > 0) {
+        const fileList = rejected.map(f => `• ${f.filename}: ${f.reason}`).join("\n");
+        api.warning({
+          message: `${rejected.length} dosya CV olarak tanınamadı`,
+          description: (
+            <div style={{ whiteSpace: "pre-line", fontSize: 12 }}>{fileList}</div>
+          ),
+          duration: 8,
+          placement: "topRight",
+        });
+      }
+
       api.success({ message: "Analiz tamamlandı!", description: "Sonuçları görüntüleyebilirsiniz.", placement: "topRight" });
     } catch (error) {
+      const errMsg = error?.response?.data?.message || "Bir hata oluştu.";
+      const isCvRejection = errMsg.includes("CV/özgeçmiş olarak tanınamadı");
       api.error({
-        message: "Analiz başlatılamadı",
-        description: error?.response?.data?.message || "Bir hata oluştu.",
+        message: isCvRejection ? "Geçerli CV bulunamadı" : "Analiz başlatılamadı",
+        description: isCvRejection
+          ? "Yüklenen dosyaların hiçbiri CV/özgeçmiş formatında değil. Lütfen geçerli CV dosyaları yükleyin."
+          : errMsg,
+        duration: 6,
         placement: "topRight",
       });
     }
@@ -911,7 +954,7 @@ export default function AnalysisDetailPage() {
 
       {/* ── Analiz Progress Modal ───────────────────────────────────────── */}
       <Modal
-        open={isRunning}
+        open={isRunning || showComplete}
         footer={null}
         closable={false}
         maskClosable={false}
@@ -1219,7 +1262,7 @@ export default function AnalysisDetailPage() {
                             <Text strong style={{ fontSize: 13, color: progressColor }}>{completionPercent}%</Text>
                           </div>
                           <Progress percent={completionPercent} showInfo={false}
-                            strokeColor={progressColor} railColor="#EEF2FF" size={6} />
+                            strokeColor={progressColor} trailColor="#EEF2FF" strokeWidth={6} />
                         </div>
 
                         {/* ── BÖLÜM 1: Analiz Adı ─────────────────────── */}

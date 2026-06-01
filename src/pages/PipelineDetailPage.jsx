@@ -340,7 +340,14 @@ function CandidateCard({
                 size="middle"
                 icon={<ArrowRightOutlined />}
                 loading={isSaving}
-                onClick={() => { setStageDateVal(dayjs()); setStageModal(true); }}
+                onClick={() => {
+                  if (interviewDate) {
+                    onStageAdvance(nextStage.key);
+                  } else {
+                    setStageDateVal(dayjs());
+                    setStageModal(true);
+                  }
+                }}
                 style={{
                   borderRadius: 10,
                   background: `linear-gradient(135deg, ${PRIMARY}, #6366F1)`,

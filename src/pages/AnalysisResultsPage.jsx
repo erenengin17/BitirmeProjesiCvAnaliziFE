@@ -1178,7 +1178,7 @@ export default function AnalysisResultsPage() {
     // ── Veri satırları ────────────────────────────────────────────────────────
     // 0:Sıra 1:Aday 2:Dosya 3:Puan 4:Durum 5:Teknik 6:Eşleşen 7:Eksik
     // 8:Soft 9:Deneyim 10:DeneyimYıl 11:Eğitim 12:Proje 13:Anlamsal 14:Not 15:Özet
-    const dataRows = sorted.map((r, i) => [
+    const dataRows = filteredSorted.map((r, i) => [
       i + 1,
       r.candidateName ?? "",
       r.fileName ?? "",
@@ -1214,7 +1214,7 @@ export default function AnalysisResultsPage() {
 
       row.forEach((val, c) => {
         const ref = XLSXStyle.utils.encode_cell({ r: ri + 1, c });
-        const score = round1(sorted[ri]?.finalScore ?? 0);
+        const score = round1(filteredSorted[ri]?.finalScore ?? 0);
 
         if (c === 0) {
           ws[ref] = { v: val, t: "n", s: rankStyle(ri) };
