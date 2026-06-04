@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import XLSXStyle from "xlsx-js-style";
@@ -12,7 +12,7 @@ import {
   SearchOutlined, ArrowRightOutlined, UserOutlined,
   FileExcelOutlined, CloseCircleOutlined,
   EditOutlined, CalendarOutlined, SaveOutlined,
-  HistoryOutlined,
+  HistoryOutlined, FormOutlined, StarFilled,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -23,7 +23,11 @@ import {
   useUpdateInterviewDate,
   useUpdateResultNote,
   useStageLog,
+  useChatPipelineResults,
 } from "../requests/AnalysisQueries";
+import ChatDrawer from "../components/ChatDrawer";
+import EvaluationModal from "../components/EvaluationModal";
+import axiosInstance from "../requests/axiosInstance";
 
 dayjs.locale("tr");
 
@@ -75,9 +79,11 @@ function splitList(str) {
   return str.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
+const EVAL_STAGES = new Set(["TELEFON_GORUSMESI", "TEKNIK_MULAKAT", "IK_MULAKATI"]);
+
 function CandidateCard({
   item, rank, status, interviewDate,
-  onStageAdvance, onReject, onInterviewDateChange, onNoteSave, isSaving,
+  onStageAdvance, onReject, onInterviewDateChange, onNoteSave, onOpenEval, evalRefreshKey, isSaving,
 }) {
   const score   = Math.round(item.finalScore || 0);
   const color   = scoreColor(score);
@@ -97,8 +103,47 @@ function CandidateCard({
   const [stageModal, setStageModal]       = useState(false);
   const [stageDateVal, setStageDateVal]   = useState(null);
   const [showLog, setShowLog]             = useState(false);
+  const [showEvals, setShowEvals]         = useState(false);
+  const [evalData, setEvalData]           = useState(null);
+  const [evalLoading, setEvalLoading]     = useState(false);
 
   const { data: logData, isFetching: isLogLoading } = useStageLog(item.id, showLog);
+
+  const EVAL_STAGE_LABELS = {
+    TELEFON_GORUSMESI: "Telefon Görüşmesi",
+    TEKNIK_MULAKAT:    "Teknik Mülakat",
+    IK_MULAKATI:       "İK Mülakatı",
+  };
+  const EVAL_STAGE_COLORS = {
+    TELEFON_GORUSMESI: "#0EA5E9",
+    TEKNIK_MULAKAT:    "#7C3AED",
+    IK_MULAKATI:       "#EC4899",
+  };
+
+  const loadEvals = async () => {
+    if (evalData !== null) return;
+    setEvalLoading(true);
+    try {
+      const res = await axiosInstance.get(`/api/analyses/results/${item.id}/evaluations`);
+      setEvalData(res.data || []);
+    } catch {
+      setEvalData([]);
+    } finally {
+      setEvalLoading(false);
+    }
+  };
+
+  const toggleEvals = () => {
+    if (!showEvals) loadEvals();
+    setShowEvals((v) => !v);
+  };
+
+  useEffect(() => {
+    if (evalRefreshKey === 0) return;
+    setEvalData(null);
+    if (showEvals) loadEvals();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [evalRefreshKey]);
   const stageLog = logData?.data || [];
 
   const copyEmail = (e) => {
@@ -459,20 +504,40 @@ function CandidateCard({
         </div>
       </div>
 
-      {/* Aşama geçmişi */}
-      <div style={{ marginTop: 10 }}>
-        <Button
-          type="text" size="small"
-          icon={<HistoryOutlined />}
-          onClick={() => setShowLog((v) => !v)}
-          style={{ color: "#6B7280", padding: "0 6px", fontSize: 12 }}
-        >
-          {showLog ? "Geçmişi Gizle" : "Aşama Geçmişi"}
-        </Button>
+      {/* Aşama geçmişi + Değerlendirmeler */}
+      <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ display: "flex", gap: 4 }}>
+          <Button
+            type="text" size="small"
+            icon={<HistoryOutlined />}
+            onClick={() => setShowLog((v) => !v)}
+            style={{ color: "#6B7280", padding: "0 6px", fontSize: 12 }}
+          >
+            {showLog ? "Geçmişi Gizle" : "Aşama Geçmişi"}
+          </Button>
+          <Button
+            type="text" size="small"
+            icon={<FormOutlined />}
+            onClick={toggleEvals}
+            style={{ color: "#6B7280", padding: "0 6px", fontSize: 12 }}
+          >
+            {showEvals ? "Değerlendirmeleri Gizle" : "Değerlendirmeler"}
+          </Button>
+          {onOpenEval && Object.keys(EVAL_STAGE_LABELS).includes(status) && (
+            <Button
+              type="text" size="small"
+              icon={<StarFilled style={{ color: EVAL_STAGE_COLORS[status] }} />}
+              onClick={() => onOpenEval(item.id, status, item.candidateName)}
+              style={{ color: EVAL_STAGE_COLORS[status], padding: "0 6px", fontSize: 12 }}
+            >
+              Değerlendirme Ekle
+            </Button>
+          )}
+        </div>
 
         {showLog && (
           <div style={{
-            marginTop: 8, padding: "12px 14px", borderRadius: 10,
+            padding: "12px 14px", borderRadius: 10,
             background: "#F9FAFB", border: "1px solid #E5E7EB",
           }}>
             {isLogLoading ? (
@@ -504,6 +569,66 @@ function CandidateCard({
                       }}>
                         {to?.label ?? entry.toStatus}
                       </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {showEvals && (
+          <div style={{
+            padding: "12px 14px", borderRadius: 10,
+            background: "#F9FAFB", border: "1px solid #E5E7EB",
+          }}>
+            {evalLoading ? (
+              <Text style={{ fontSize: 12, color: "#9CA3AF" }}>Yükleniyor...</Text>
+            ) : !evalData || evalData.length === 0 ? (
+              <Text style={{ fontSize: 12, color: "#9CA3AF" }}>Henüz değerlendirme eklenmemiş.</Text>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {evalData.map((ev) => {
+                  const stageColor = EVAL_STAGE_COLORS[ev.stage] ?? "#6B7280";
+                  const stageLabel = EVAL_STAGE_LABELS[ev.stage] ?? ev.stage;
+                  const scores = [
+                    ev.communicationScore, ev.motivationScore,
+                    ev.technicalScore, ev.problemSolvingScore, ev.codeQualityScore,
+                    ev.culturalFitScore, ev.teamworkScore, ev.careerGoalsScore,
+                  ].filter(Boolean);
+                  const avgScore = scores.length
+                    ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)
+                    : null;
+                  return (
+                    <div key={ev.id} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                      <span style={{
+                        background: stageColor + "18", color: stageColor,
+                        border: `1px solid ${stageColor}40`,
+                        borderRadius: 999, padding: "1px 8px", fontWeight: 600, fontSize: 11,
+                        whiteSpace: "nowrap",
+                      }}>
+                        {stageLabel}
+                      </span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          {ev.overallScore && (
+                            <span style={{ fontSize: 12, fontWeight: 700, color: stageColor }}>
+                              Genel: {ev.overallScore}/5
+                            </span>
+                          )}
+                          {avgScore && (
+                            <span style={{ fontSize: 11, color: "#6B7280" }}>· Ort: {avgScore}/5</span>
+                          )}
+                          <span style={{ fontSize: 11, color: "#9CA3AF" }}>
+                            · {dayjs(ev.evaluatedAt).format("DD MMM YYYY")}
+                          </span>
+                        </div>
+                        {ev.notes && (
+                          <Text style={{ fontSize: 11, color: "#92400E", display: "block", marginTop: 2 }}>
+                            {ev.notes}
+                          </Text>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -578,9 +703,14 @@ export default function PipelineDetailPage() {
   const [localInterviewDate, setLocalInterviewDate] = useState({});
   const [savingId, setSavingId]                     = useState(null);
 
+  const [chatHighlight, setChatHighlight]    = useState(null);
+  const [evalModal, setEvalModal]            = useState({ open: false, resultId: null, stage: null, candidateName: null });
+  const [evalRefreshKeys, setEvalRefreshKeys] = useState({});
+
   const { mutateAsync: updateStatus }        = useUpdateResultStatus();
   const { mutateAsync: updateInterviewDate } = useUpdateInterviewDate();
   const { mutateAsync: updateNote }          = useUpdateResultNote();
+  const { mutateAsync: chatPipeline }        = useChatPipelineResults();
 
   const allResults = data?.data || [];
 
@@ -622,11 +752,18 @@ export default function PipelineDetailPage() {
   }, [group, search, stageFilter, localStatus]);
 
   const handleStageAdvance = async (resultId, nextStatus) => {
+    const currentItem = allResults.find((r) => r.id === resultId);
+    const fromStatus = localStatus[String(resultId)] ?? currentItem?.status ?? "MULAKATA_CAGRILDI";
+
     setSavingId(resultId);
     setLocalStatus((prev) => ({ ...prev, [String(resultId)]: nextStatus }));
     try {
       await updateStatus({ resultId, status: nextStatus });
       queryClient.invalidateQueries({ queryKey: ["pipelineResults"] });
+
+      if (EVAL_STAGES.has(fromStatus)) {
+        setEvalModal({ open: true, resultId, stage: fromStatus, candidateName: currentItem?.candidateName ?? "" });
+      }
     } catch {
       // Optimistic update stays — server state will sync on next refetch
     } finally {
@@ -869,18 +1006,27 @@ export default function PipelineDetailPage() {
                 ) : (
                   <div style={{ display: "grid", gap: 14 }}>
                     {filtered.map((item, i) => (
-                      <CandidateCard
+                      <div
                         key={item.id}
-                        item={item}
-                        rank={i}
-                        status={getStatus(item)}
-                        interviewDate={localInterviewDate[String(item.id)] ?? item.interviewDate}
-                        onStageAdvance={(nextKey) => handleStageAdvance(item.id, nextKey)}
-                        onReject={() => handleReject(item.id)}
-                        onInterviewDateChange={(iso) => handleInterviewDate(item.id, iso)}
-                        onNoteSave={(note) => handleNoteSave(item.id, note)}
-                        isSaving={savingId === item.id}
-                      />
+                        style={{
+                          opacity: chatHighlight !== null && chatHighlight.size > 0 && ![...chatHighlight].some((n) => n.trim().toLowerCase() === (item.candidateName ?? "").trim().toLowerCase()) ? 0.35 : 1,
+                          transition: "opacity 0.25s ease",
+                        }}
+                      >
+                        <CandidateCard
+                          item={item}
+                          rank={i}
+                          status={getStatus(item)}
+                          interviewDate={localInterviewDate[String(item.id)] ?? item.interviewDate}
+                          onStageAdvance={(nextKey) => handleStageAdvance(item.id, nextKey)}
+                          onReject={() => handleReject(item.id)}
+                          onInterviewDateChange={(iso) => handleInterviewDate(item.id, iso)}
+                          onNoteSave={(note) => handleNoteSave(item.id, note)}
+                          onOpenEval={(rid, stage, name) => setEvalModal({ open: true, resultId: rid, stage, candidateName: name })}
+                          evalRefreshKey={evalRefreshKeys[String(item.id)] ?? 0}
+                          isSaving={savingId === item.id}
+                        />
+                      </div>
                     ))}
                     {filtered.length === 0 && search && (
                       <Card style={{ borderRadius: 18, border: "1px solid #E9EDF5", textAlign: "center" }} styles={{ body: { padding: 40 } }}>
@@ -894,6 +1040,48 @@ export default function PipelineDetailPage() {
           </Col>
         </Row>
       </div>
+
+      <EvaluationModal
+        open={evalModal.open}
+        resultId={evalModal.resultId}
+        stage={evalModal.stage}
+        candidateName={evalModal.candidateName}
+        onClose={() => setEvalModal({ open: false, resultId: null, stage: null, candidateName: null })}
+        onSaved={() => {
+          const rid = String(evalModal.resultId);
+          setEvalRefreshKeys((prev) => ({ ...prev, [rid]: (prev[rid] ?? 0) + 1 }));
+          setEvalModal({ open: false, resultId: null, stage: null, candidateName: null });
+        }}
+      />
+
+      <ChatDrawer
+        context={group?.positionName}
+        isFiltered={chatHighlight !== null}
+        onChat={(q) => chatPipeline({ analysisId, query: q })}
+        onFilter={(names) => setChatHighlight(names)}
+        onClearFilter={() => setChatHighlight(null)}
+        onExecuteAction={async (ea) => {
+          if (ea.type !== "bulk_status") return;
+          const sel = ea.selection ?? {};
+          const all = group?.candidates ?? [];
+          let targets = [];
+          if (sel.rule === "top_n") {
+            targets = all.slice(0, sel.n ?? 0);
+          } else if (sel.rule === "rest_after_n") {
+            targets = all.slice(sel.n ?? 0);
+          } else if (sel.rule === "all") {
+            targets = all;
+          } else {
+            const names = sel.names ?? ea.candidate_names ?? [];
+            const nameSet = new Set(names.map((n) => n.toLowerCase().trim()));
+            targets = all.filter((c) => nameSet.has((c.candidateName ?? "").toLowerCase().trim()));
+          }
+          for (const c of targets) {
+            setLocalStatus((prev) => ({ ...prev, [String(c.id)]: ea.status }));
+            await updateStatus({ resultId: c.id, status: ea.status });
+          }
+        }}
+      />
     </div>
   );
 }

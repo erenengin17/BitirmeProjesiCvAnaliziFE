@@ -141,6 +141,18 @@ export const useStageLog = (resultId, enabled) => {
 };
 
 
+export const useChatRunResults = () => {
+  return useMutation({
+    mutationFn: ({ runId, query }) => AnalysisManager.chatRunResults(runId, query),
+  });
+};
+
+export const useChatPipelineResults = () => {
+  return useMutation({
+    mutationFn: ({ analysisId, query }) => AnalysisManager.chatPipelineResults(analysisId, query),
+  });
+};
+
 export const useLastRun = (analysisId) => {
   return useQuery({
     queryKey: ["lastRun", analysisId],
@@ -149,5 +161,12 @@ export const useLastRun = (analysisId) => {
       return res.data;
     },
     enabled: !!analysisId,
+  });
+};
+
+export const useAnalytics = () => {
+  return useQuery({
+    queryKey: ["analytics"],
+    queryFn: () => AnalysisManager.getAnalytics(),
   });
 };

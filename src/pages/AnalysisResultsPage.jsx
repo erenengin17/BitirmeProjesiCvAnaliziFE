@@ -17,12 +17,14 @@ import {
   TeamOutlined, EyeOutlined, DownloadOutlined,
   FileExcelOutlined, SaveOutlined, EditOutlined,
   DeleteOutlined, PlusOutlined, SwapOutlined, CheckOutlined,
-  RobotOutlined, FilterOutlined, CopyOutlined,
+  RobotOutlined, FilterOutlined, CopyOutlined, LoadingOutlined,
+  RollbackOutlined, ClockCircleOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 import LoginNavbar from "../components/LoginNavbar";
-import { useRunResults, useUpdateResultNote, useExplainResult, useRunById, useUpdateResultStatus, useBulkUpdateStatus } from "../requests/AnalysisQueries";
+import { useRunResults, useUpdateResultNote, useExplainResult, useRunById, useUpdateResultStatus, useBulkUpdateStatus, useChatRunResults } from "../requests/AnalysisQueries";
 import AnalysisManager from "../requests/AnalysisManager";
+import ChatDrawer from "../components/ChatDrawer";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -191,6 +193,17 @@ function CandidateCard({ item, rank, onPreview, isCompared, onToggleCompare, com
     }
   };
 
+  const handleSetPending = async () => {
+    setPipelineStatus("BEKLEMEDE");
+    onStatusChange?.(item.id, "BEKLEMEDE");
+    try {
+      await updateStatus({ resultId: item.id, status: "BEKLEMEDE" });
+    } catch {
+      setPipelineStatus(item.status || "BEKLEMEDE");
+      onStatusChange?.(item.id, item.status || "BEKLEMEDE");
+    }
+  };
+
   const handleExplain = async () => {
     setExplainOpen(true);
     if (explanation) return;
@@ -344,42 +357,95 @@ function CandidateCard({ item, rank, onPreview, isCompared, onToggleCompare, com
           <Col flex="none" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
 
-              {/* Durum dropdown */}
-              {isAddingToPool ? (
-                <Tag style={{ borderRadius: 999, padding: "3px 12px", fontSize: 12, fontWeight: 600, background: "#F3F4F6", color: "#9CA3AF", border: "1px solid #E5E7EB" }}>
-                  <Spin size="small" style={{ marginRight: 6 }} />
-                  İşleniyor...
-                </Tag>
-              ) : !inPipeline && !isRejected ? (
-                <>
+              {/* Durum / Aksiyon */}
+              {!inPipeline && !isRejected ? (
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <Button
                     size="small"
-                    icon={<TeamOutlined />}
-                    loading={isAddingToPool}
                     onClick={handleAddToPipeline}
-                    style={{ borderRadius: 8, fontSize: 12, height: 28, background: "#3940C1", color: "#fff", border: "none", fontWeight: 600 }}
+                    loading={isAddingToPool}
+                    icon={<TeamOutlined />}
+                    style={{
+                      height: 32, padding: "0 14px",
+                      borderRadius: 10, border: "none",
+                      fontSize: 12, fontWeight: 700,
+                      background: "linear-gradient(135deg, #3940C1 0%, #5B5FF4 100%)",
+                      color: "#fff",
+                      boxShadow: "0 3px 10px rgba(57,64,193,0.30)",
+                    }}
                   >
                     Mülakata Çağır
                   </Button>
                   <Button
                     size="small"
-                    icon={<CloseCircleOutlined />}
-                    loading={isAddingToPool}
-                    danger
                     onClick={handleReject}
-                    style={{ borderRadius: 8, fontSize: 12, height: 28, fontWeight: 600 }}
+                    loading={isAddingToPool}
+                    icon={<CloseCircleOutlined />}
+                    style={{
+                      height: 32, padding: "0 12px",
+                      borderRadius: 10,
+                      border: "1.5px solid #FCA5A5",
+                      fontSize: 12, fontWeight: 600,
+                      background: "#FFF5F5", color: "#DC2626",
+                    }}
                   >
                     Reddet
                   </Button>
-                </>
+                </div>
               ) : inPipeline ? (
-                <Tag style={{ borderRadius: 999, padding: "3px 12px", background: "#D1FAE5", color: "#059669", border: "1px solid #A7F3D0", fontWeight: 600, fontSize: 12 }}>
-                  <CheckCircleOutlined style={{ marginRight: 4 }} />Mülakata Çağrıldı
-                </Tag>
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 7,
+                  height: 32, padding: "0 13px",
+                  borderRadius: 10,
+                  background: "linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)",
+                  border: "1.5px solid #6EE7B7",
+                }}>
+                  {isAddingToPool
+                    ? <LoadingOutlined style={{ color: "#059669", fontSize: 13 }} />
+                    : <CheckCircleOutlined style={{ color: "#059669", fontSize: 13 }} />
+                  }
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#059669" }}>
+                    Mülakata Çağrıldı
+                  </span>
+                  <div style={{ width: 1, height: 14, background: "#A7F3D0", margin: "0 1px" }} />
+                  <Button
+                    type="text"
+                    size="small"
+                    onClick={handleSetPending}
+                    disabled={isAddingToPool}
+                    icon={<RollbackOutlined />}
+                    style={{ color: "#9CA3AF", fontSize: 11, padding: "0 3px", height: "auto", fontWeight: 500 }}
+                  >
+                    Geri al
+                  </Button>
+                </div>
               ) : (
-                <Tag style={{ borderRadius: 999, padding: "3px 12px", background: "#FFF1F2", color: "#EF4444", border: "1px solid #FECDD3", fontWeight: 600, fontSize: 12 }}>
-                  <CloseCircleOutlined style={{ marginRight: 4 }} />Reddedildi
-                </Tag>
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 7,
+                  height: 32, padding: "0 13px",
+                  borderRadius: 10,
+                  background: "linear-gradient(135deg, #FFF5F5 0%, #FFF1F2 100%)",
+                  border: "1.5px solid #FCA5A5",
+                }}>
+                  {isAddingToPool
+                    ? <LoadingOutlined style={{ color: "#EF4444", fontSize: 13 }} />
+                    : <CloseCircleOutlined style={{ color: "#EF4444", fontSize: 13 }} />
+                  }
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#EF4444" }}>
+                    Reddedildi
+                  </span>
+                  <div style={{ width: 1, height: 14, background: "#FECDD3", margin: "0 1px" }} />
+                  <Button
+                    type="text"
+                    size="small"
+                    onClick={handleSetPending}
+                    disabled={isAddingToPool}
+                    icon={<RollbackOutlined />}
+                    style={{ color: "#9CA3AF", fontSize: 11, padding: "0 3px", height: "auto", fontWeight: 500 }}
+                  >
+                    Geri al
+                  </Button>
+                </div>
               )}
 
               {/* Karşılaştır */}
@@ -1010,8 +1076,11 @@ export default function AnalysisResultsPage() {
   const [minScore,          setMinScore]          = useState(0);
   const [filterDrawerOpen,  setFilterDrawerOpen]  = useState(false);
 
+  const [chatHighlight, setChatHighlight] = useState(null);
+
   const [api, contextHolder] = notification.useNotification();
   const { mutateAsync: bulkUpdateStatus, isPending: isBulkUpdating } = useBulkUpdateStatus();
+  const { mutateAsync: chatRun } = useChatRunResults();
 
   const toggleSelect = (id) => {
     setSelectedIds((prev) => {
@@ -1659,32 +1728,42 @@ export default function AnalysisResultsPage() {
             </Card>
 
             {/* Status geçiş sekmeleri */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+            <div style={{
+              display: "flex", gap: 3, marginBottom: 16,
+              background: "#fff", borderRadius: 16, padding: 5,
+              boxShadow: "0 1px 8px rgba(0,0,0,0.06)",
+              border: "1px solid #E9EDF5",
+              flexWrap: "wrap",
+            }}>
               {[
-                { key: "ALL",               label: "Tümü",               count: tabCounts.ALL },
-                { key: "MULAKATA_CAGRILDI", label: "Mülakata Çağrıldı",  count: tabCounts.MULAKATA_CAGRILDI },
-                { key: "BEKLEMEDE",         label: "Beklemede",           count: tabCounts.BEKLEMEDE },
-                { key: "REDDEDILDI",        label: "Reddedildi",          count: tabCounts.REDDEDILDI },
-              ].map(({ key, label, count }) => {
+                { key: "ALL",               label: "Tümü",               count: tabCounts.ALL,               icon: null,                        activeColor: "#3940C1", activeBg: "#EEF2FF", activeBorder: "#C7D2FE" },
+                { key: "MULAKATA_CAGRILDI", label: "Mülakata Çağrıldı",  count: tabCounts.MULAKATA_CAGRILDI, icon: <CheckCircleOutlined />,      activeColor: "#059669", activeBg: "#ECFDF5", activeBorder: "#6EE7B7" },
+                { key: "BEKLEMEDE",         label: "Beklemede",           count: tabCounts.BEKLEMEDE,         icon: <ClockCircleOutlined />,      activeColor: "#D97706", activeBg: "#FFFBEB", activeBorder: "#FDE68A" },
+                { key: "REDDEDILDI",        label: "Reddedildi",          count: tabCounts.REDDEDILDI,        icon: <CloseCircleOutlined />,      activeColor: "#EF4444", activeBg: "#FFF1F2", activeBorder: "#FCA5A5" },
+              ].map(({ key, label, count, icon, activeColor, activeBg, activeBorder }) => {
                 const active = statusFilter === key;
                 return (
                   <button
                     key={key}
                     onClick={() => setStatusFilter(key)}
                     style={{
-                      padding: "7px 18px", borderRadius: 999, border: "none",
+                      flex: 1, minWidth: 110,
+                      padding: "9px 14px", borderRadius: 12,
+                      border: active ? `1.5px solid ${activeBorder}` : "1.5px solid transparent",
                       cursor: "pointer", fontWeight: 600, fontSize: 13,
-                      background: active ? "#3940C1" : "#fff",
-                      color: active ? "#fff" : "#374151",
-                      boxShadow: active ? "0 2px 10px rgba(57,64,193,0.25)" : "0 1px 4px rgba(0,0,0,0.07)",
-                      display: "inline-flex", alignItems: "center", gap: 7,
+                      background: active ? activeBg : "transparent",
+                      color: active ? activeColor : "#6B7280",
+                      display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7,
+                      transition: "all 0.15s ease",
                     }}
                   >
-                    {label}
+                    {icon && <span style={{ fontSize: 13, opacity: active ? 1 : 0.5 }}>{icon}</span>}
+                    <span>{label}</span>
                     <span style={{
-                      background: active ? "rgba(255,255,255,0.22)" : "#F1F5F9",
-                      color: active ? "#fff" : "#6B7280",
+                      background: active ? activeColor + "20" : "#F1F5F9",
+                      color: active ? activeColor : "#9CA3AF",
                       borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 700,
+                      minWidth: 22, textAlign: "center",
                     }}>
                       {count}
                     </span>
@@ -1695,62 +1774,99 @@ export default function AnalysisResultsPage() {
 
             {/* Toplu seçim çubuğu */}
             {selectedIds.size > 0 && (
-              <Card
-                style={{ borderRadius: 14, border: "1.5px solid #C7D2FE", background: "#EEF2FF", marginBottom: 14 }}
-                styles={{ body: { padding: "10px 16px" } }}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-                  <Space>
-                    <Badge count={selectedIds.size} color="#3940C1" />
-                    <Text style={{ color: "#374151", fontWeight: 600 }}>aday seçildi</Text>
-                    <Button size="small" onClick={clearSelection} style={{ color: "#9CA3AF", borderRadius: 8 }}>
-                      Seçimi Temizle
-                    </Button>
-                  </Space>
-                  <Space wrap>
-                    <Button
-                      type="primary"
-                      icon={<TeamOutlined />}
-                      loading={isBulkUpdating}
-                      onClick={handleBulkAddToPipeline}
-                      style={{ background: "#3940c1", border: "none", borderRadius: 10, fontWeight: 600 }}
+              <div style={{
+                borderRadius: 16,
+                background: "linear-gradient(135deg, #1e2472 0%, #3940C1 55%, #5B5FF4 100%)",
+                marginBottom: 14,
+                padding: "14px 20px",
+                boxShadow: "0 6px 24px rgba(57,64,193,0.28)",
+                display: "flex", alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap", gap: 12,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{
+                    width: 38, height: 38, borderRadius: 11, flexShrink: 0,
+                    background: "rgba(255,255,255,0.18)",
+                    border: "1px solid rgba(255,255,255,0.25)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Text strong style={{ color: "#fff", fontSize: 16, lineHeight: 1 }}>{selectedIds.size}</Text>
+                  </div>
+                  <div>
+                    <Text style={{ color: "#fff", fontWeight: 700, fontSize: 14, display: "block", lineHeight: 1.4 }}>
+                      {selectedIds.size} aday seçildi
+                    </Text>
+                    <span
+                      onClick={clearSelection}
+                      style={{ color: "rgba(255,255,255,0.60)", fontSize: 12, cursor: "pointer", fontWeight: 500 }}
                     >
-                      Mülakata Çağır ({selectedIds.size})
-                    </Button>
-                    <Button
-                      icon={<CloseCircleOutlined />}
-                      danger
-                      loading={isBulkUpdating}
-                      onClick={handleBulkReject}
-                      style={{ borderRadius: 10, fontWeight: 600 }}
-                    >
-                      Reddet ({selectedIds.size})
-                    </Button>
-                    <Button
-                      icon={<CheckCircleOutlined />}
-                      loading={isBulkUpdating}
-                      onClick={handleBulkSetPending}
-                      style={{ borderRadius: 10, fontWeight: 600, background: "#FEF3C7", color: "#D97706", border: "1px solid #FDE68A" }}
-                    >
-                      Beklemede'ye Al ({selectedIds.size})
-                    </Button>
-                  </Space>
+                      Seçimi temizle
+                    </span>
+                  </div>
                 </div>
-              </Card>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <Button
+                    icon={<TeamOutlined />}
+                    loading={isBulkUpdating}
+                    onClick={handleBulkAddToPipeline}
+                    style={{
+                      borderRadius: 10, fontWeight: 700, height: 36,
+                      background: "#fff", color: "#3940C1",
+                      border: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+                    }}
+                  >
+                    Mülakata Çağır ({selectedIds.size})
+                  </Button>
+                  <Button
+                    icon={<CloseCircleOutlined />}
+                    loading={isBulkUpdating}
+                    onClick={handleBulkReject}
+                    style={{
+                      borderRadius: 10, fontWeight: 600, height: 36,
+                      background: "rgba(239,68,68,0.18)", color: "#FCA5A5",
+                      border: "1px solid rgba(239,68,68,0.35)",
+                    }}
+                  >
+                    Reddet ({selectedIds.size})
+                  </Button>
+                  <Button
+                    icon={<RollbackOutlined />}
+                    loading={isBulkUpdating}
+                    onClick={handleBulkSetPending}
+                    style={{
+                      borderRadius: 10, fontWeight: 600, height: 36,
+                      background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.85)",
+                      border: "1px solid rgba(255,255,255,0.22)",
+                    }}
+                  >
+                    Beklemede ({selectedIds.size})
+                  </Button>
+                </div>
+              </div>
             )}
 
-            {/* Hepsini seç satırı */}
+            {/* Hepsini seç + sayaç */}
             {!isLoading && filteredSorted.length > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "4px 2px" }}>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                marginBottom: 12, padding: "9px 14px",
+                background: "#fff", borderRadius: 12,
+                border: "1px solid #E9EDF5",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+              }}>
                 <Checkbox
                   checked={allFilteredSelected}
                   indeterminate={someFilteredSelected && !allFilteredSelected}
                   onChange={handleSelectAll}
                 >
-                  <Text style={{ fontSize: 13, color: "#6B7280" }}>
-                    {allFilteredSelected ? "Seçimi kaldır" : "Hepsini seç"} ({filteredSorted.length} aday)
+                  <Text style={{ fontSize: 13, color: "#374151", fontWeight: someFilteredSelected ? 600 : 400 }}>
+                    {allFilteredSelected ? "Seçimi kaldır" : "Hepsini seç"}
                   </Text>
                 </Checkbox>
+                <Text style={{ fontSize: 12, color: "#9CA3AF", fontWeight: 500 }}>
+                  {filteredSorted.length} aday listeleniyor
+                </Text>
               </div>
             )}
 
@@ -1766,22 +1882,29 @@ export default function AnalysisResultsPage() {
             ) : (
               <div style={{ display: "grid", gap: 14 }}>
                 {filteredSorted.map((item, idx) => (
-                  <CandidateCard
+                  <div
                     key={item.id ?? idx}
-                    item={item}
-                    rank={idx}
-                    onPreview={handlePreview}
-                    isCompared={compareIds.has(item.id)}
-                    onToggleCompare={toggleCompare}
-                    compareDisabled={compareIds.size >= 3}
-                    onNoteSaved={handleNoteSaved}
-                    categories={activeCategories}
-                    minExperienceYears={run?.minExperienceYears ?? 0}
-                    isSelected={selectedIds.has(item.id)}
-                    onToggleSelect={toggleSelect}
-                    onStatusChange={handleStatusChange}
-                    statusOverride={statusMap[item.id]}
-                  />
+                    style={{
+                      opacity: chatHighlight !== null && chatHighlight.size > 0 && ![...chatHighlight].some((n) => n.trim().toLowerCase() === (item.candidateName ?? "").trim().toLowerCase()) ? 0.35 : 1,
+                      transition: "opacity 0.25s ease",
+                    }}
+                  >
+                    <CandidateCard
+                      item={item}
+                      rank={idx}
+                      onPreview={handlePreview}
+                      isCompared={compareIds.has(item.id)}
+                      onToggleCompare={toggleCompare}
+                      compareDisabled={compareIds.size >= 3}
+                      onNoteSaved={handleNoteSaved}
+                      categories={activeCategories}
+                      minExperienceYears={run?.minExperienceYears ?? 0}
+                      isSelected={selectedIds.has(item.id)}
+                      onToggleSelect={toggleSelect}
+                      onStatusChange={handleStatusChange}
+                      statusOverride={statusMap[item.id]}
+                    />
+                  </div>
                 ))}
               </div>
             )}
@@ -2138,6 +2261,42 @@ export default function AnalysisResultsPage() {
         open={compareOpen}
         onClose={() => setCompareOpen(false)}
         categories={activeCategories}
+      />
+
+      {/* ── AI Chat ── */}
+      <ChatDrawer
+        context={run?.positionName}
+        isFiltered={chatHighlight !== null}
+        onChat={(q) => chatRun({ runId, query: q })}
+        onFilter={(names) => setChatHighlight(names)}
+        onClearFilter={() => setChatHighlight(null)}
+        onExecuteAction={async (ea) => {
+          if (ea.type !== "bulk_status") return;
+          const sel = ea.selection ?? {};
+          // results zaten finalScore DESC sıralı (BE'den gelir)
+          let ids = [];
+          if (sel.rule === "top_n") {
+            ids = results.slice(0, sel.n ?? 0).map((r) => r.id);
+          } else if (sel.rule === "rest_after_n") {
+            ids = results.slice(sel.n ?? 0).map((r) => r.id);
+          } else if (sel.rule === "all") {
+            ids = results.map((r) => r.id);
+          } else {
+            // by_names veya eski format (candidate_names)
+            const names = sel.names ?? ea.candidate_names ?? [];
+            const nameSet = new Set(names.map((n) => n.toLowerCase().trim()));
+            ids = results
+              .filter((r) => nameSet.has((r.candidateName ?? "").toLowerCase().trim()))
+              .map((r) => r.id);
+          }
+          if (!ids.length) return;
+          await bulkUpdateStatus({ resultIds: ids, status: ea.status });
+          setStatusMap((prev) => {
+            const next = { ...prev };
+            ids.forEach((id) => { next[id] = ea.status; });
+            return next;
+          });
+        }}
       />
 
       {/* ── PDF / DOCX Önizleme Modalı ── */}

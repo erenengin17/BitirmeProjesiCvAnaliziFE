@@ -95,6 +95,18 @@ deleteAnalysis(analysisId) {
     return axiosInstance.get(`/api/analyses/results/${resultId}/stage-log`);
   }
 
+  chatRunResults(runId, query) {
+    return axiosInstance.post(`/api/analyses/runs/${runId}/chat`, { query });
+  }
+
+  chatPipelineResults(analysisId, query) {
+    return axiosInstance.post(`/api/analyses/${analysisId}/pipeline-chat`, { query });
+  }
+
+  getAnalytics() {
+    return axiosInstance.get("/api/analyses/my/analytics");
+  }
+
 }
 
 export default new AnalysisManager();

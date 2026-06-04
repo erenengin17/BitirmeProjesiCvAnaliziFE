@@ -8,6 +8,7 @@ import {
   DownOutlined,
   SettingOutlined,
   FunnelPlotOutlined,
+  BarChartOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import AtlasCvLogo from "../assets/images/YeniLogoAtlasCV.png";
@@ -126,6 +127,18 @@ const LoginNavbar = () => {
             }}
           >
             Mülakat Takibi
+          </Button>
+
+          <Button
+            type="text"
+            onClick={() => navigate("/analytics")}
+            icon={<BarChartOutlined style={{ color: PRIMARY }} />}
+            style={{
+              color: "#111827",
+              fontWeight: 500,
+            }}
+          >
+            Analitik
           </Button>
 
           <Dropdown menu={{ items: profileItems }} trigger={["click"]}>
